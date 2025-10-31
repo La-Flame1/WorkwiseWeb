@@ -1,0 +1,64 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# C extensions
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+ENV/
+
+# IDEs / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / Temp
+*.log
+logs/
+tmp/
+temp/
+
+# Database (SQLite in your case; adjust if using other DBs)
+*.db
+*.sqlite
+*.sqlite3
+workwise.db  # Or your specific DB file from Database/db.py
+
+# Dependencies (install via requirements.txt)
+Pipfile.lock
+poetry.lock
+
+# Build / Dist
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+
+# FastAPI/Swagger specific (if generating extras)
+openapi.json  # If you export it manually
+
+# Windows-specific
+$RECYCLE.BIN/
+thumbs.db
+ehthumbs.db
+Desktop.ini
+
+*.tmp
