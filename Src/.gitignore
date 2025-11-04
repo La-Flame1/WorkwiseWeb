@@ -5,6 +5,12 @@ __pycache__/
 *.so
 .Python
 
+# Environment variables
+.env
+*.env
+
+# ... existing ignores (venv, .db-wal, etc.) ...
+
 # C extensions
 *.egg-info/
 .installed.cfg
