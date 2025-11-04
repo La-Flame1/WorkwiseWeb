@@ -1,4 +1,5 @@
 import os
+import requests
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
@@ -39,7 +40,8 @@ app = FastAPI(
         {"name": "worker_courses", "description": "Worker course enrollments management"},
         {"name": "governments", "description": "Government departments management"},
         {"name": "government_programs", "description": "Government programs management"},
-        {"name": "training_institutions", "description": "Training institutions management"}
+        {"name": "training_institutions", "description": "Training institutions management"},
+        {"name": "geolocation", "description": "Free geocoding and mapping utilities (OSM-based)"}
     ],
     swagger_ui_default_parameters=[{"name": "X-Endpoint-Token", "in": "header", "required": True}]
 )
@@ -710,3 +712,42 @@ def listTrainingInstitutions():
         ) for i in insts]
     finally:
         conn.close()
+
+@app.get(
+    "/v1/geocode",
+    tags=["geolocation"],
+    dependencies=[Depends(requireEndpointToken(endpointTokens.get("GET:/v1/geocode") or "GEOCODEFREE001"))]  # Optional token
+)
+def geocodeAddress(address: str) -> dict[str, str | float | int]:  # Query param: ?address="123 Main St, New York"
+    if not address:
+        raise HTTPException(status_code=400, detail="Address parameter required")
+    
+    # Nominatim API call (free, rate-limited to 1/sec; user-agent required)
+    url = "https://nominatim.openstreetmap.org/search"
+    params: dict[str, str | int] = {
+        "q": address,
+        "format": "json",
+        "limit": 1,  # Top result
+        "addressdetails": 1  # Include full details
+    }
+    headers = {"User-Agent": "WorkwiseAPI/1.0 (your.email@example.com)"}  # Required; replace with yours
+    
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()  # Raise on 4xx/5xx
+        data = response.json()
+        
+        if not data:
+            raise HTTPException(status_code=404, detail="Address not found")
+        
+        result = data[0]
+        return {
+            "address": result.get("display_name", address),
+            "lat": float(result["lat"]),
+            "lon": float(result["lon"]),
+            "formatted_address": result.get("display_name"),
+            "place_type": result.get("type", "unknown"),
+            "confidence": int(result.get("importance", 0))  # OSM confidence score
+        }
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Geocoding failed: {str(e)}")

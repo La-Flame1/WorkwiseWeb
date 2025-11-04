@@ -101,6 +101,15 @@ def initDatabase() -> None:
     cur.execute('CREATE INDEX IF NOT EXISTS idx_applications_worker ON applications (worker_id)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_applications_job ON applications (job_id)')
 
+    def columnExists(cur: sqlite3.Cursor, table: str, column: str) -> bool:
+        cur.execute(f"PRAGMA table_info({table})")
+        return any(row[1] == column for row in cur.fetchall())
+
+    # Example for employers
+    if not columnExists(cur, 'employers', 'lat'):
+        cur.execute("ALTER TABLE employers ADD COLUMN lat REAL")
+    if not columnExists(cur, 'employers', 'lon'):
+        cur.execute("ALTER TABLE employers ADD COLUMN lon REAL")
     conn.commit()
     conn.close()
 
