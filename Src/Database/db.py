@@ -335,3 +335,12 @@ def getTrainingInstitutions(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
     cur.execute("SELECT * FROM training_institutions")
     columns = [desc[0] for desc in cur.description]
     return [dict(zip(columns, row)) for row in cur.fetchall()]
+
+def getUserById(conn: sqlite3.Connection, user_id: int) -> Optional[Dict[str, Any]]:
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+    row = cur.fetchone()
+    if row:
+        columns = [desc[0] for desc in cur.description]
+        return dict(zip(columns, row))
+    return None

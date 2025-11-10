@@ -1,6 +1,15 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int  # Seconds until expire
+
+class TokenData(BaseModel):
+    user_id: Optional[int] = None
+    role: Optional[str] = None
+
 class RegisterIn(BaseModel):
     username: str
     email: EmailStr
