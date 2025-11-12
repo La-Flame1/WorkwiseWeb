@@ -1,5 +1,4 @@
 # WorkwiseWeb
-[![Ask DeepWiki](https://devin.ai/assets/askdeepwiki.png)](https://deepwiki.com/Nevvyboi/WorkwiseWeb)
 
 WorkwiseWeb is the backend API for a professional networking and job-seeking application. Built with FastAPI, it provides a comprehensive set of features for user management, profile customization, job searching, and union membership tracking. The API is designed to be robust and scalable, utilizing a SQLite database for data persistence and Argon2 for secure password hashing.
 
