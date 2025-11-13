@@ -6,6 +6,7 @@ import uuid
 
 from fastapi import FastAPI, HTTPException, Depends, Request, File, UploadFile
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.exception_handlers import http_exception_handler as defaultHttpHandler
@@ -56,6 +57,8 @@ app = FastAPI(
         {"name": "union_members", "description": "Union membership management"}
     ]
 )
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 templates = Jinja2Templates(directory="Templates")
 endpoint_token = APIKeyHeader(name="X-Endpoint-Token")
