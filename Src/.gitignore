@@ -62,3 +62,20 @@ ehthumbs.db
 Desktop.ini
 
 *.tmp
+
+# Database
+databaseWorkwise.db
+*.sqlproj
+
+# Virtual environments
+venv/
+.env
+__pycache__/
+*.pyc
+
+# Uploads
+WorkwiseWeb/Src/uploads/
+
+# IDE
+.vscode/
+.idea/
