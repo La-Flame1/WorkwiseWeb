@@ -4,3 +4,4 @@ passlib[argon2]
 pydantic
 jinja2
 python-multipart
+pydantic[email]
