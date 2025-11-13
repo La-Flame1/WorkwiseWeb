@@ -22,8 +22,8 @@ from Models.models import (
 
 from Database.db import (
     initDatabase, getDatabase, userExists, getUsersDetails, getUserById,
-    updateUserProfile, getUserCVs, addCV, deleteCV, setPrimaryCV, # pyright: ignore[reportAssignmentType]
-    getUserQualifications, addQualification, updateQualification, deleteQualification, # pyright: ignore[reportAssignmentType]
+    updateUserProfile, getUserCVs, addCV, deleteCV, setPrimaryCV,
+    getUserQualifications, addQualification, updateQualification, deleteQualification,
     getUserApplicationsCount, getUserSavedJobsCount, getSavedJobs, addSavedJob, deleteSavedJob,
     unionExists, getUnions, workerInUnion, getUnionMembers
 )
@@ -189,30 +189,38 @@ def login(body: LoginIn):
     tags=["profile"],
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("PUT", "/v1/workwise/profile")]))]
 )
-def updateUserProfile(user_id: int, update: UserProfileUpdateIn): # type: ignore
+def updateUserProfileEndpoint(user_id: int, update: UserProfileUpdateIn): # Renamed to avoid clash
     conn = getDatabase()
     try:
-        user = getUserById(conn, user_id) # type: ignore
+        user = getUserById(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        updates = {}
+        updates: dict[str, Any] = {}
         if update.profileName is not None:
-            updates["profile_name"] = update.profileName
+            updates["profileName"] = update.profileName
         if update.profileBio is not None:
-            updates["profile_bio"] = update.profileBio
+            updates["profileBio"] = update.profileBio
         if update.phoneNumber is not None:
-            updates["phone_number"] = update.phoneNumber
+            updates["phoneNumber"] = update.phoneNumber
         if update.location is not None:
             updates["location"] = update.location
         if update.sideProjects is not None:
-            updates["side_projects"] = update.sideProjects  # Added for synchronization
-        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+            updates["sideProjects"] = update.sideProjects
         
-        if updates:
-            updateUserProfile(conn, user_id, updates)  # pyright: ignore[reportCallIssue] # Assumes this function handles the UPDATE query
+        # Add userId for the db function and set update timestamp
+        updates["userId"] = user_id
+        updates["updatedAt"] = datetime.now(timezone.utc).isoformat()
         
-        return getUserProfile(user_id)  # Return updated profile # type: ignore
+        if len(updates) > 2: # (userId and updatedAt are always present)
+            updateUserProfile(conn, updates)  # Corrected call
+        
+        # Return updated profile by re-fetching
+        updated_user_data = getUserById(conn, user_id)
+        if not updated_user_data:
+            raise HTTPException(status_code=500, detail="Failed to retrieve updated profile")
+            
+        return UserProfileOut(**updated_user_data)
     finally:
         conn.close()
 
@@ -241,20 +249,22 @@ def getUserProfile(user_id: int):
 def uploadProfileImage(user_id: int, file: UploadFile = File(...)):
     conn = getDatabase()
     try:
-        user = getUserById(conn, user_id) # type: ignore
+        user = getUserById(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
         # Save file
-        ext = os.path.splitext(file.filename)[1] # pyright: ignore[reportArgumentType, reportUnknownVariableType, reportCallIssue]
+        ext = os.path.splitext(file.filename or "default.png")[1]
         filename = f"{uuid.uuid4()}{ext}"
         path = os.path.join(UPLOAD_DIR, "profile_images", filename)
+        
         with open(path, "wb") as f:
-            f.write(file.file.read())
+            content = file.file.read()
+            f.write(content)
         
         # Update DB
         cur = conn.cursor()
-        cur.execute("UPDATE users SET profile_image = ? WHERE id = ?", (path, user_id))
+        cur.execute("UPDATE users SET profile_image = ? WHERE user_id = ?", (path, user_id))
         conn.commit()
         
         return ProfileImageUploadOut(
@@ -272,20 +282,20 @@ def uploadProfileImage(user_id: int, file: UploadFile = File(...)):
     tags=["cv"],
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/cvs")]))]
 )
-def listUserCVs(user_id: int):
+def route_list_user_cvs(user_id: int): # Renamed to avoid clash with imported db function
     conn = getDatabase()
     try:
-        cvs = getUserCVs(conn, user_id) 
+        cvs = getUserCVs(conn, user_id) # This now correctly calls the db function
         return [CVOut(
-            cvId=cv["cv_id"], # pyright: ignore[reportUnknownArgumentType]
-            userId=cv["user_id"], # type: ignore
-            cvName=cv["cv_name"], # pyright: ignore[reportUnknownArgumentType]
-            filePath=cv["file_path"], # pyright: ignore[reportUnknownArgumentType]
-            fileSize=cv.get("file_size"), # pyright: ignore[reportUnknownMemberType] # pyright: ignore[reportUnknownArgumentType] # type: ignore
-            mimeType=cv.get("mime_type"), # pyright: ignore[reportUnknownArgumentType] # pyright: ignore[reportUnknownMemberType] # type: ignore
-            isPrimary=bool(cv["is_primary"]), # pyright: ignore[reportUnknownArgumentType]
-            uploadedAt=cv["uploaded_at"] # pyright: ignore[reportUnknownArgumentType]
-        ) for cv in cvs] # pyright: ignore[reportUnknownVariableType]
+            cvId=cv["cvId"],
+            userId=cv["userId"],
+            cvName=cv["cvName"],
+            filePath=cv["filePath"],
+            fileSize=cv.get("fileSize"),
+            mimeType=cv.get("mimeType"),
+            isPrimary=bool(cv["isPrimary"]),
+            uploadedAt=cv["uploadedAt"]
+        ) for cv in cvs]
     finally:
         conn.close()
 
@@ -298,36 +308,39 @@ def listUserCVs(user_id: int):
 def uploadCV(user_id: int, file: UploadFile = File(...)):
     conn = getDatabase()
     try:
-        user = getUserById(conn, user_id) # type: ignore
+        user = getUserById(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
         # Save file
-        ext = os.path.splitext(file.filename)[1] # type: ignore
+        ext = os.path.splitext(file.filename or "default.pdf")[1]
         filename = f"{uuid.uuid4()}{ext}"
         path = os.path.join(UPLOAD_DIR, "cvs", filename)
+        
         with open(path, "wb") as f:
-            f.write(file.file.read())
+            content = file.file.read()
+            f.write(content)
         
         # Add to DB
-        cv_data = { # type: ignore
-            "user_id": user_id,
-            "cv_name": file.filename,
-            "file_path": path,
-            "file_size": os.path.getsize(path),
-            "mime_type": file.content_type,
-            "is_primary": 0,  # Default
-            "uploaded_at": datetime.now(timezone.utc).isoformat()
+        uploaded_at = datetime.now(timezone.utc).isoformat()
+        cv_data: dict[str, Any] = {
+            "userId": user_id,
+            "cvName": file.filename,
+            "filePath": path,
+            "fileSize": os.path.getsize(path),
+            "mimeType": file.content_type,
+            "isPrimary": 0,  # Default
+            "uploadedAt": uploaded_at
         }
-        cv_id = addCV(conn, cv_data) # type: ignore
+        cv_id = addCV(conn, cv_data) # Corrected to pass camelCase keys
         if not cv_id:
             raise HTTPException(status_code=500, detail="Failed to upload CV")
         
         return CVUploadOut(
             cvId=cv_id,
-            cvName=file.filename, # type: ignore
+            cvName=str(file.filename),
             filePath=path,
-            uploadedAt=cv_data["uploaded_at"] # type: ignore
+            uploadedAt=uploaded_at
         )
     finally:
         conn.close()
@@ -369,24 +382,24 @@ def makePrimaryCV(user_id: int, cv_id: int):
     tags=["qualifications"],
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/qualifications")]))]
 )
-def getUserQualifications(user_id: int):
+def route_list_user_qualifications(user_id: int): # Renamed to avoid clash
     conn = getDatabase()
     try:
-        quals = getUserQualifications(conn, user_id) # type: ignore
+        quals = getUserQualifications(conn, user_id) # This now correctly calls the db function
         return [QualificationOut(
-            qualificationId=q["qualification_id"], # type: ignore
-            userId=q["user_id"],  # type: ignore
-            qualificationType=q["qualification_type"],  # type: ignore
-            institution=q["institution"],  # type: ignore
-            fieldOfStudy=q.get("field_of_study"),  # type: ignore
-            qualificationName=q["qualification_name"],  # type: ignore
-            startDate=q.get("start_date"),  # type: ignore
-            endDate=q.get("end_date"),  # type: ignore
-            isCurrent=bool(q["is_current"]),  # type: ignore
-            gradeOrGpa=q.get("grade_or_gpa"),  # type: ignore
-            description=q.get("description"),  # type: ignore
-            createdAt=q["created_at"]  # type: ignore
-        ) for q in quals] # type: ignore
+            qualificationId=q["qualificationId"],
+            userId=q["userId"],
+            qualificationType=q["qualificationType"],
+            institution=q["institution"],
+            fieldOfStudy=q.get("fieldOfStudy"),
+            qualificationName=q["qualificationName"],
+            startDate=q.get("startDate"),
+            endDate=q.get("endDate"),
+            isCurrent=bool(q["isCurrent"]),
+            gradeOrGpa=q.get("gradeOrGpa"),
+            description=q.get("description"),
+            createdAt=q["createdAt"]
+        ) for q in quals]
     finally:
         conn.close()
 
@@ -399,24 +412,24 @@ def getUserQualifications(user_id: int):
 def addUserQualification(user_id: int, body: QualificationIn):
     conn = getDatabase()
     try:
-        user = getUserById(conn, user_id) # type: ignore
+        user = getUserById(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        qual_data = {# type: ignore
-            "user_id": user_id,
-            "qualification_type": body.qualificationType,
+        qual_data: dict[str, Any] = {
+            "userId": user_id,
+            "qualificationType": body.qualificationType,
             "institution": body.institution,
-            "field_of_study": body.fieldOfStudy,
-            "qualification_name": body.qualificationName,
-            "start_date": body.startDate,
-            "end_date": body.endDate if not body.isCurrent else None,
-            "is_current": int(body.isCurrent),
-            "grade_or_gpa": body.gradeOrGpa,
+            "fieldOfStudy": body.fieldOfStudy,
+            "qualificationName": body.qualificationName,
+            "startDate": body.startDate,
+            "endDate": body.endDate if not body.isCurrent else None,
+            "isCurrent": int(body.isCurrent),
+            "gradeOrGpa": body.gradeOrGpa,
             "description": body.description,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "createdAt": datetime.now(timezone.utc).isoformat()
         }
-        qual_id = addQualification(conn, qual_data)# type: ignore
+        qual_id = addQualification(conn, qual_data) # Corrected to pass camelCase keys
         if not qual_id:
             raise HTTPException(status_code=500, detail="Failed to add qualification")
         
@@ -432,7 +445,7 @@ def addUserQualification(user_id: int, body: QualificationIn):
             isCurrent=body.isCurrent,
             gradeOrGpa=body.gradeOrGpa,
             description=body.description,
-            createdAt=qual_data["created_at"]# type: ignore
+            createdAt=qual_data["createdAt"]
         )
     finally:
         conn.close()
@@ -443,31 +456,32 @@ def addUserQualification(user_id: int, body: QualificationIn):
     tags=["qualifications"],
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("PUT", "/v1/workwise/qualifications")]))]
 )
-def updateUserQualification(user_id: int, qualification_id: int, body: QualificationUpdateIn):
+def updateUserQualification(user_id: int, qualification_id: int, body: QualificationUpdateIn): # This name is fine, no import clash
     conn = getDatabase()
     try:
-        updates = {}
-        if body.qualificationType is not None: updates["qualification_type"] = body.qualificationType
+        updates: dict[str, Any] = {}
+        if body.qualificationType is not None: updates["qualificationType"] = body.qualificationType
         if body.institution is not None: updates["institution"] = body.institution
-        if body.fieldOfStudy is not None: updates["field_of_study"] = body.fieldOfStudy
-        if body.qualificationName is not None: updates["qualification_name"] = body.qualificationName
-        if body.startDate is not None: updates["start_date"] = body.startDate
-        if body.endDate is not None: updates["end_date"] = body.endDate
-        if body.isCurrent is not None: updates["is_current"] = int(body.isCurrent)
-        if body.gradeOrGpa is not None: updates["grade_or_gpa"] = body.gradeOrGpa
+        if body.fieldOfStudy is not None: updates["fieldOfStudy"] = body.fieldOfStudy
+        if body.qualificationName is not None: updates["qualificationName"] = body.qualificationName
+        if body.startDate is not None: updates["startDate"] = body.startDate
+        if body.endDate is not None: updates["endDate"] = body.endDate
+        if body.isCurrent is not None: updates["isCurrent"] = int(body.isCurrent)
+        if body.gradeOrGpa is not None: updates["gradeOrGpa"] = body.gradeOrGpa
         if body.description is not None: updates["description"] = body.description
         
         if updates:
-            if updateQualification(conn, qualification_id, user_id, updates):# type: ignore
-                # Return updated qualification (assume getUserQualifications can be used or implement getQualById)
-                quals = getUserQualifications(conn, user_id)# type: ignore
-                updated_qual = next((q for q in quals if q["qualification_id"] == qualification_id), None)# type: ignore
-                if updated_qual:
-                    return QualificationOut(**updated_qual)# type: ignore
-                raise HTTPException(status_code=404, detail="Qualification not found after update")
-            else:
-                raise HTTPException(status_code=404, detail="Qualification not found")
-        return getUserQualifications(user_id)[0]  # Placeholder; adjust as needed
+            if not updateQualification(conn, qualification_id, user_id, updates):
+                raise HTTPException(status_code=404, detail="Qualification not found or update failed")
+        
+        # Fetch the updated (or un-updated) qualification to return it
+        quals = getUserQualifications(conn, user_id) # This now uses the DB function
+        updated_qual = next((q for q in quals if q["qualificationId"] == qualification_id), None)
+        
+        if updated_qual:
+            return QualificationOut(**updated_qual)
+        else:
+            raise HTTPException(status_code=404, detail="Qualification not found after update")
     finally:
         conn.close()
 
@@ -496,7 +510,7 @@ def removeUserQualification(user_id: int, qualification_id: int):
 def getUserStats(user_id: int):
     conn = getDatabase()
     try:
-        user = getUserById(conn, user_id) # type: ignore
+        user = getUserById(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -522,14 +536,14 @@ def listSavedJobs(user_id: int):
     try:
         jobs = getSavedJobs(conn, user_id)
         return [SavedJobOut(
-            savedJobId=job["saved_job_id"],
-            userId=job["user_id"],
-            jobTitle=job["job_title"],
-            companyName=job["company_name"],
-            jobLocation=job.get("job_location"),
-            salaryRange=job.get("salary_range"),
-            jobDescription=job.get("job_description"),
-            savedAt=job["saved_at"]
+            savedJobId=job["savedJobId"],
+            userId=job["userId"],
+            jobTitle=job["jobTitle"],
+            companyName=job["companyName"],
+            jobLocation=job.get("jobLocation"),
+            salaryRange=job.get("salaryRange"),
+            jobDescription=job.get("jobDescription"),
+            savedAt=job["savedAt"]
         ) for job in jobs]
     finally:
         conn.close()
@@ -543,21 +557,22 @@ def listSavedJobs(user_id: int):
 def saveJob(user_id: int, body: SavedJobIn):
     conn = getDatabase()
     try:
-        user = getUserById(conn, user_id) # type: ignore
+        user = getUserById(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        job_data = { # type: ignore
-            'user_id': user_id,
-            'job_title': body.jobTitle,
-            'company_name': body.companyName,
-            'job_location': body.jobLocation,
-            'salary_range': body.salaryRange,
-            'job_description': body.jobDescription,
-            'saved_at': datetime.now(timezone.utc).isoformat()
+        saved_at = datetime.now(timezone.utc).isoformat()
+        job_data: dict[str, Any] = {
+            'userId': user_id,
+            'jobTitle': body.jobTitle,
+            'companyName': body.companyName,
+            'jobLocation': body.jobLocation,
+            'salaryRange': body.salaryRange,
+            'jobDescription': body.jobDescription,
+            'savedAt': saved_at
         }
         
-        job_id = addSavedJob(conn, job_data) # type: ignore
+        job_id = addSavedJob(conn, job_data) # Corrected to pass camelCase keys
         if not job_id:
             raise HTTPException(status_code=500, detail="Failed to save job")
         
@@ -569,7 +584,7 @@ def saveJob(user_id: int, body: SavedJobIn):
             jobLocation=body.jobLocation,
             salaryRange=body.salaryRange,
             jobDescription=body.jobDescription,
-            savedAt=job_data['saved_at'] # type: ignore
+            savedAt=saved_at
         )
     finally:
         conn.close()
@@ -629,7 +644,7 @@ def createUnion(body: UnionIn):
         cur.execute("""
             INSERT INTO unions (register_num, sector_info, membership_size, is_active_council, created_at)
             VALUES (?, ?, ?, ?, ?)
-        """, (body.register_num, body.sector_info, body.membership_size, body.is_active_council, created_at))
+        """, (body.register_num, body.sector_info, body.membership_size, int(body.is_active_council), created_at))
         conn.commit()
 
         union_id = cur.lastrowid

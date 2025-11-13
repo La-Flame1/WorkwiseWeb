@@ -55,7 +55,7 @@ class ProfileImageUploadOut(BaseModel):
 # ========== CV MODELS ==========
 class CVOut(BaseModel):
     cvId: int
-    cvId: int
+    # Removed duplicate cvId field
     userId: int
     cvName: str
     filePath: str

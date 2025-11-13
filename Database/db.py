@@ -1,7 +1,7 @@
 # Database/db.py
 import sqlite3
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 workwiseDatabase = "databaseWorkwise.db"
 
@@ -194,6 +194,7 @@ def getUserById(conn: sqlite3.Connection, user_id: int) -> Optional[Dict[str, An
     if not row:
         return None
     d = dict(row)
+    # Transform snake_case (DB) to camelCase (API)
     return {
         "userId": d["user_id"],
         "username": d["username"],
@@ -213,9 +214,10 @@ def getUserById(conn: sqlite3.Connection, user_id: int) -> Optional[Dict[str, An
 # Database/db.py
 def updateUserProfile(conn: sqlite3.Connection, profile_data: Dict[str, Any]) -> bool:
     cur = conn.cursor()
-    fields = []
-    values = []
+    fields: list[str] = []
+    values: list[Any] = []
 
+    # Map camelCase (API) to snake_case (DB)
     field_map = {
         'profileName': 'profile_name',
         'profileBio': 'profile_bio',
@@ -227,29 +229,29 @@ def updateUserProfile(conn: sqlite3.Connection, profile_data: Dict[str, Any]) ->
 
     for api_key, db_key in field_map.items():
         if api_key in profile_data:
-            fields.append(f"{db_key} = ?") # type: ignore
-            values.append(profile_data[api_key]) # type: ignore
+            fields.append(f"{db_key} = ?")
+            values.append(profile_data[api_key])
 
     if 'updatedAt' in profile_data:
-        fields.append("updated_at = ?") # type: ignore
-        values.append(profile_data['updatedAt']) # type: ignore
+        fields.append("updated_at = ?")
+        values.append(profile_data['updatedAt'])
 
     if not fields:
-        return False
+        return False # No fields to update
 
-    # Use the user_id from the route (not passed in profile_data)
+    # Get the user_id from the profile_data dictionary (passed from main.py)
     user_id = profile_data.get("userId")
     if not user_id:
-        return False
+        return False # Cannot update without a user ID
 
-    values.append(user_id) # type: ignore
-    query = f"UPDATE users SET {', '.join(fields)} WHERE user_id = ?" # type: ignore
-    cur.execute(query, values) # type: ignore
+    values.append(user_id)
+    query = f"UPDATE users SET {', '.join(fields)} WHERE user_id = ?"
+    cur.execute(query, tuple(values))
     conn.commit()
     return cur.rowcount > 0
 
 # ----------------------------------------------------------------------
-#  CV HELPERS (internal names start with _ to avoid clash with route)
+#  CV HELPERS
 # ----------------------------------------------------------------------
 def _getUserCVs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
     cur = conn.cursor()
@@ -262,10 +264,11 @@ def _getUserCVs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
     columns = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
 
-    result = []
+    result: List[Dict[str, Any]] = []
     for row in rows:
         d = dict(zip(columns, row))
-        result.append({ # type: ignore
+        # Transform snake_case (DB) to camelCase (API)
+        result.append({
             "cvId": d["cv_id"],
             "userId": d["user_id"],
             "cvName": d["cv_name"],
@@ -275,7 +278,7 @@ def _getUserCVs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
             "isPrimary": bool(d["is_primary"]),
             "uploadedAt": d["uploaded_at"],
         })
-    return result # type: ignore
+    return result
 
 
 def getUserCVs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
@@ -285,6 +288,7 @@ def getUserCVs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
 
 def addCV(conn: sqlite3.Connection, cv_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
+    # Expects camelCase keys from main.py, maps them to snake_case for DB
     cur.execute(
         """INSERT INTO cvs
            (user_id, cv_name, file_path, file_size, mime_type, is_primary, uploaded_at)
@@ -296,7 +300,7 @@ def addCV(conn: sqlite3.Connection, cv_data: Dict[str, Any]) -> Optional[int]:
             cv_data.get("fileSize"),
             cv_data.get("mimeType"),
             cv_data.get("isPrimary", False),
-            cv_data.get("uploadedAt", datetime.utcnow().isoformat()), # type: ignore
+            cv_data.get("uploadedAt", datetime.now(timezone.utc).isoformat()),
         ),
     )
     conn.commit()
@@ -337,10 +341,11 @@ def _getUserQualifications(conn: sqlite3.Connection, user_id: int) -> List[Dict[
     columns = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
 
-    result = []
+    result: List[Dict[str, Any]] = []
     for row in rows:
         d = dict(zip(columns, row))
-        result.append({ # type: ignore
+        # Transform snake_case (DB) to camelCase (API)
+        result.append({
             "qualificationId": d["qualification_id"],
             "userId": d["user_id"],
             "qualificationType": d["qualification_type"],
@@ -354,7 +359,7 @@ def _getUserQualifications(conn: sqlite3.Connection, user_id: int) -> List[Dict[
             "description": d.get("description"),
             "createdAt": d["created_at"],
         })
-    return result # type: ignore
+    return result
 
 
 def getUserQualifications(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
@@ -363,6 +368,7 @@ def getUserQualifications(conn: sqlite3.Connection, user_id: int) -> List[Dict[s
 
 def addQualification(conn: sqlite3.Connection, qual_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
+    # Expects camelCase keys from main.py, maps them to snake_case for DB
     cur.execute(
         """INSERT INTO qualifications
            (user_id, qualification_type, institution, field_of_study,
@@ -377,10 +383,10 @@ def addQualification(conn: sqlite3.Connection, qual_data: Dict[str, Any]) -> Opt
             qual_data["qualificationName"],
             qual_data.get("startDate"),
             qual_data.get("endDate"),
-            qual_data.get("isCurrent", False),
+            int(qual_data.get("isCurrent", False)),
             qual_data.get("gradeOrGpa"),
             qual_data.get("description"),
-            qual_data.get("createdAt", datetime.utcnow().isoformat()), # type: ignore
+            qual_data.get("createdAt", datetime.now(timezone.utc).isoformat()),
         ),
     )
     conn.commit()
@@ -394,8 +400,9 @@ def updateQualification(
     qual_data: Dict[str, Any],
 ) -> bool:
     cur = conn.cursor()
-    fields = []
-    values = []
+    fields: list[str] = []
+    values: list[Any] = []
+    # Map camelCase (API) to snake_case (DB)
     field_map = {
         "qualificationType": "qualification_type",
         "institution": "institution",
@@ -409,15 +416,19 @@ def updateQualification(
     }
     for api, db in field_map.items():
         if api in qual_data:
-            fields.append(f"{db} = ?") # type: ignore
-            values.append(qual_data[api]) # type: ignore
+            fields.append(f"{db} = ?")
+            # Handle bool to int conversion for isCurrent
+            if api == "isCurrent":
+                values.append(int(qual_data[api]))
+            else:
+                values.append(qual_data[api])
 
     if not fields:
         return False
 
-    values.extend([qualification_id, user_id]) # type: ignore
-    query = f"UPDATE qualifications SET {', '.join(fields)} WHERE qualification_id = ? AND user_id = ?" # type: ignore
-    cur.execute(query, values) # type: ignore
+    values.extend([qualification_id, user_id])
+    query = f"UPDATE qualifications SET {', '.join(fields)} WHERE qualification_id = ? AND user_id = ?"
+    cur.execute(query, tuple(values))
     conn.commit()
     return cur.rowcount > 0
 
@@ -438,13 +449,15 @@ def deleteQualification(conn: sqlite3.Connection, qualification_id: int, user_id
 def getUserApplicationsCount(conn: sqlite3.Connection, user_id: int) -> int:
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM job_applications WHERE user_id = ?", (user_id,))
-    return cur.fetchone()[0]
+    row = cur.fetchone()
+    return row[0] if row else 0
 
 
 def getUserSavedJobsCount(conn: sqlite3.Connection, user_id: int) -> int:
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM saved_jobs WHERE user_id = ?", (user_id,))
-    return cur.fetchone()[0]
+    row = cur.fetchone()
+    return row[0] if row else 0
 
 
 def _getSavedJobs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
@@ -456,13 +469,14 @@ def _getSavedJobs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]
            WHERE user_id = ? ORDER BY saved_at DESC""",
         (user_id,),
     )
-    columns = [desc[0] for desc in cur.description]
+    columns: List[str] = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
 
-    result = []
+    result: List[Dict[str, Any]] = []
     for row in rows:
-        d = dict(zip(columns, row))
-        result.append({ # type: ignore
+        d: Dict[str, Any] = dict(zip(columns, row))
+        # Transform snake_case (DB) to camelCase (API)
+        result.append({
             "savedJobId": d["saved_job_id"],
             "userId": d["user_id"],
             "jobTitle": d["job_title"],
@@ -472,7 +486,7 @@ def _getSavedJobs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]
             "jobDescription": d.get("job_description"),
             "savedAt": d["saved_at"],
         })
-    return result # type: ignore
+    return result
 
 
 def getSavedJobs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
@@ -481,6 +495,7 @@ def getSavedJobs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]
 
 def addSavedJob(conn: sqlite3.Connection, job_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
+    # Expects camelCase keys from main.py, maps them to snake_case for DB
     cur.execute(
         """INSERT INTO saved_jobs
            (user_id, job_title, company_name, job_location,
@@ -493,7 +508,7 @@ def addSavedJob(conn: sqlite3.Connection, job_data: Dict[str, Any]) -> Optional[
             job_data.get("jobLocation"),
             job_data.get("salaryRange"),
             job_data.get("jobDescription"),
-            job_data.get("savedAt", datetime.utcnow().isoformat()), # type: ignore
+            job_data.get("savedAt", datetime.now(timezone.utc).isoformat()),
         ),
     )
     conn.commit()
@@ -536,8 +551,8 @@ def createUnion(conn: sqlite3.Connection, union_data: Dict[str, Any]) -> Optiona
             union_data["register_num"],
             union_data["sector_info"],
             union_data.get("membership_size", 0),
-            union_data.get("is_active_council", False),
-            union_data.get("createdAt", datetime.utcnow().isoformat()), # type: ignore
+            int(union_data.get("is_active_council", False)),
+            union_data.get("createdAt", datetime.now(timezone.utc).isoformat()),
         ),
     )
     conn.commit()
@@ -574,7 +589,7 @@ def addUnionMember(conn: sqlite3.Connection, member_data: Dict[str, Any]) -> Opt
             member_data["union_id"],
             member_data["membership_num"],
             member_data.get("status", "active"),
-            member_data.get("createdAt", datetime.utcnow().isoformat()), # type: ignore
+            member_data.get("createdAt", datetime.now(timezone.utc).isoformat()),
         ),
     )
     conn.commit()
