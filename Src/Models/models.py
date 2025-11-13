@@ -36,6 +36,7 @@ class UserProfileOut(BaseModel):
     profileBio: Optional[str] = None
     phoneNumber: Optional[str] = None
     location: Optional[str] = None
+    sideProjects: Optional[str] = None  # Added for synchronization
     createdAt: str
     updatedAt: Optional[str] = None
 
@@ -44,6 +45,7 @@ class UserProfileUpdateIn(BaseModel):
     profileBio: Optional[str] = None
     phoneNumber: Optional[str] = None
     location: Optional[str] = None
+    sideProjects: Optional[str] = None  # Added for synchronization
 
 class ProfileImageUploadOut(BaseModel):
     userId: int
@@ -52,6 +54,7 @@ class ProfileImageUploadOut(BaseModel):
 
 # ========== CV MODELS ==========
 class CVOut(BaseModel):
+    cvId: int
     cvId: int
     userId: int
     cvName: str
