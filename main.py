@@ -201,7 +201,7 @@ def send_reset_code_email(to_email: str, code: str) -> bool:
             WorkWise Team
             """
             
-            payload = {
+            payload: dict[str, Any] = {
                 "personalizations": [{
                     "to": [{"email": to_email}],
                     "subject": "WorkWise Password Reset Code"
@@ -216,15 +216,15 @@ def send_reset_code_email(to_email: str, code: str) -> bool:
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             
             if response.status_code == 202:
-                print(f"✅ SendGrid: Reset code email sent successfully to {to_email}")
+                print(f"SendGrid: Reset code email sent successfully to {to_email}")
                 return True
             else:
-                print(f"❌ SendGrid API error ({response.status_code}): {response.text}")
-                print(f"📧 Falling back to SMTP...")
+                print(f"SendGrid API error ({response.status_code}): {response.text}")
+                print(f"Falling back to SMTP...")
         
         except Exception as e:
-            print(f"❌ SendGrid API failed: {e}")
-            print(f"📧 Falling back to SMTP...")
+            print(f"SendGrid API failed: {e}")
+            print(f"Falling back to SMTP...")
     
     # Fallback to SMTP (Gmail, Mailgun, etc.)
     try:
@@ -235,8 +235,8 @@ def send_reset_code_email(to_email: str, code: str) -> bool:
         from_email = os.environ.get("FROM_EMAIL", smtp_user)
         
         if not smtp_user or not smtp_password:
-            print("❌ Email credentials not configured. Set SENDGRID_API_KEY or SMTP credentials.")
-            print(f"📧 Reset code for {to_email}: {code} (NOT SENT - Configure email service)")
+            print("Email credentials not configured. Set SENDGRID_API_KEY or SMTP credentials.")
+            print(f"Reset code for {to_email}: {code} (NOT SENT - Configure email service)")
             return False
         
         # Create message
@@ -292,8 +292,8 @@ def send_reset_code_email(to_email: str, code: str) -> bool:
         return True
         
     except Exception as e:
-        print(f"❌ Failed to send email to {to_email}: {e}")
-        print(f"📧 Reset code for {to_email}: {code} (NOT SENT - Error occurred)")
+        print(f"Failed to send email to {to_email}: {e}")
+        print(f"Reset code for {to_email}: {code} (NOT SENT - Error occurred)")
         return False
 
 # ... (Exception handler and ping are unchanged) ...
