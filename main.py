@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Any, List, Optional
+from enum import Enum
 import os
 import uuid
 
@@ -23,7 +24,7 @@ from Models.models import (
 )
 
 from Database.db import (
-    initDatabase, getDatabase, userExists, getUsersDetails, getUserById,
+    initDatabase, getDatabase, searchJobs, userExists, getUsersDetails, getUserById,
     updateUserProfile, getUserCVs, addCV, deleteCV, setPrimaryCV,
     getUserQualifications, addQualification, updateQualification, deleteQualification,
     getUserApplicationsCount, getUserSavedJobsCount, getSavedJobs, addSavedJob, deleteSavedJob,
@@ -61,6 +62,17 @@ app = FastAPI(
         {"name": "union_members", "description": "Union membership management"}
     ]
 )
+
+class JobFilterType(str, Enum):
+    FULL_TIME = "Full-time"
+    PART_TIME = "Part-time"
+    CONTRACT = "Contract"
+    VOLUNTEER = "Volunteer"
+
+class WorkArrangementFilterType(str, Enum):
+    ON_SITE = "On-site"
+    HYBRID = "Hybrid"
+    REMOTE = "Remote"
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -102,6 +114,7 @@ endpointTokens = {
     "POST:/v1/workwise/jobs": "JOBADDTOK222",
     "GET:/v1/workwise/jobs": "JOBLISTTOK333",
     "GET:/v1/workwise/jobs/detail": "JOBDETAILTOK444",
+    "GET:/v1/workwise/jobs/search": "JOBSEARCHTOK555",
 
     # Unions
     "GET:/v1/workwise/unions": "UNIONLISTTOK456",
@@ -694,6 +707,66 @@ def get_job_details(job_id: int):
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         return JobDetailOut(**job)
+    finally:
+        conn.close()
+
+@app.get(
+    "/v1/workwise/jobs",
+    response_model=List[JobListingOut],
+    tags=["jobs"],
+    dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/jobs")]))]
+)
+def list_active_jobs_with_filters(
+    limit: int = 20,
+    offset: int = 0,
+    employment_type: Optional[JobFilterType] = None,
+    work_arrangement: Optional[WorkArrangementFilterType] = None,
+    location: Optional[str] = None
+):
+    conn = getDatabase()
+    try:
+        jobs = searchJobs(
+            conn,
+            employment_type=employment_type.value if employment_type else None,
+            work_arrangement=work_arrangement.value if work_arrangement else None,
+            location=location,
+            limit=limit,
+            offset=offset
+        )
+        return [JobListingOut(**job) for job in jobs]
+    finally:
+        conn.close()
+
+# New endpoint for job search (accessible from the search bar)
+@app.get(
+    "/v1/workwise/jobs/search",
+    response_model=List[JobListingOut],
+    tags=["jobs"],
+    dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/jobs/search")]))]
+)
+def search_jobs(
+    query: Optional[str] = None,
+    employment_type: Optional[JobFilterType] = None,
+    work_arrangement: Optional[WorkArrangementFilterType] = None,
+    location: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0
+):
+    """
+    Searches for jobs based on a free-text query and optional filters.
+    """
+    conn = getDatabase()
+    try:
+        jobs = searchJobs(
+            conn,
+            query=query,
+            employment_type=employment_type.value if employment_type else None,
+            work_arrangement=work_arrangement.value if work_arrangement else None,
+            location=location,
+            limit=limit,
+            offset=offset
+        )
+        return [JobListingOut(**job) for job in jobs]
     finally:
         conn.close()
 

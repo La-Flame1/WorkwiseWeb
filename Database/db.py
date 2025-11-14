@@ -579,6 +579,90 @@ def deleteSavedJob(conn: sqlite3.Connection, saved_job_id: int, user_id: int) ->
     conn.commit()
     return cur.rowcount > 0
 
+def searchJobs(
+    conn: sqlite3.Connection,
+    query: Optional[str] = None,
+    employment_type: Optional[str] = None,
+    work_arrangement: Optional[str] = None,
+    location: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0
+) -> List[Dict[str, Any]]:
+    """
+    Searches for active jobs based on keywords and filters.
+    """
+    cur = conn.cursor()
+    
+    base_query = """
+        SELECT
+            j.job_id, j.job_title, j.description, j.requirements,
+            j.salary_range, j.location, j.work_arrangement, j.employment_type,
+            j.date_posted, j.business_id,
+            b.name AS business_name,
+            b.address AS business_address,
+            b.website AS business_website
+        FROM jobs j
+        JOIN businesses b ON j.business_id = b.business_id
+        WHERE j.is_active = 1
+    """
+    params: List[Any] = []
+    
+    # Add keyword search
+    if query:
+        search_term = f"%{query.lower()}%"
+        base_query += """
+            AND (
+                LOWER(j.job_title) LIKE ? OR
+                LOWER(j.description) LIKE ? OR
+                LOWER(j.requirements) LIKE ? OR
+                LOWER(j.location) LIKE ? OR
+                LOWER(b.name) LIKE ?
+            )
+        """
+        params.extend([search_term, search_term, search_term, search_term, search_term])
+        
+    # Add employment_type filter
+    if employment_type:
+        base_query += " AND j.employment_type = ?"
+        params.append(employment_type)
+        
+    # Add work_arrangement filter
+    if work_arrangement:
+        base_query += " AND j.work_arrangement = ?"
+        params.append(work_arrangement)
+        
+    # Add location filter (could be more sophisticated, e.g., radius search)
+    if location:
+        base_query += " AND LOWER(j.location) LIKE ?"
+        params.append(f"%{location.lower()}%")
+
+    base_query += " ORDER BY j.date_posted DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    cur.execute(base_query, tuple(params))
+    columns: List[str] = [desc[0] for desc in cur.description]
+    rows = cur.fetchall()
+
+    result: List[Dict[str, Any]] = []
+    for row in rows:
+        d: Dict[str, Any] = dict(zip(columns, row))
+        # Transform snake_case (DB) to camelCase (API)
+        result.append({
+            "jobId": d["job_id"],
+            "jobTitle": d["job_title"],
+            "description": d["description"],
+            "requirements": d.get("requirements"),
+            "salaryRange": d.get("salary_range"),
+            "location": d.get("location"),
+            "workArrangement": d.get("work_arrangement"),
+            "employmentType": d.get("employment_type"),
+            "datePosted": d["date_posted"],
+            "businessId": d["business_id"],
+            "businessName": d.get("business_name"),
+            "businessAddress": d.get("business_address"),
+            "businessWebsite": d.get("business_website"),
+        })
+    return result
 
 # ----------------------------------------------------------------------
 #  BUSINESS & JOB LISTINGS
