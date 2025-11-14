@@ -4,12 +4,24 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import os 
 
-# --- This path logic is correct for both local and Railway ---
-DB_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR = os.path.dirname(DB_DIR)
-LOCAL_DB_PATH = os.path.join(BASE_DIR, "databaseWorkwise.db")
-workwiseDatabase = os.environ.get("DATABASE_FILE_PATH", LOCAL_DB_PATH) 
-# --- End path logic ---
+# --- START NEW, MORE ROBUST PATH LOGIC ---
+print("--- DETERMINING DATABASE PATH ---")
+
+# Check if we are running inside a Railway deployment
+if os.environ.get("RAILWAY_ENVIRONMENT"):
+    # We are on Railway. Force the path to the persistent volume.
+    workwiseDatabase = "/data/databaseWorkwise.db"
+    print(f"Railway environment detected. Using volume path: {workwiseDatabase}")
+else:
+    # We are running locally. Use a local file.
+    DB_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR = os.path.dirname(DB_DIR)
+    LOCAL_DB_PATH = os.path.join(BASE_DIR, "databaseWorkwise.db")
+    workwiseDatabase = LOCAL_DB_PATH
+    print(f"Local environment detected. Using local path: {workwiseDatabase}")
+
+print("---------------------------------")
+# --- END NEW PATH LOGIC ---
 
 
 def getDatabase() -> sqlite3.Connection:
@@ -37,6 +49,7 @@ def _rename_column_if_exists(cur: sqlite3.Cursor, table: str, old_col: str, new_
         cur.execute(f"ALTER TABLE {table} RENAME COLUMN {old_col} TO {new_col}")
 
 def initDatabase() -> None:
+    print("Initializing database...")
     conn = getDatabase()
     cur = conn.cursor()
 
@@ -59,7 +72,6 @@ def initDatabase() -> None:
             updated_at     TEXT
         )
     """)
-    # ... (column migrations) ...
     for col, defn in [("profile_image", "TEXT"), ("profile_name", "TEXT"), ("profile_bio", "TEXT"), ("phone_number", "TEXT"), ("location", "TEXT"), ("side_projects", "TEXT"), ("updated_at", "TEXT")]:
         _ensure_column_exists(cur, "users", col, defn)
 
@@ -187,24 +199,25 @@ def initDatabase() -> None:
         )
     ''')
 
-    # --- START NEW SECTION: AUTO-POPULATE DATABASE ---
-    # Check if jobs table is empty
+    # --- AUTO-POPULATE DATABASE ---
     cur.execute("SELECT COUNT(*) FROM jobs")
     job_count = cur.fetchone()[0]
     
-    # If it's empty, run the population script
     if job_count == 0:
         print("Database is empty. Populating with initial data...")
         _populate_initial_data(conn)
         print("Initial data populated successfully.")
-    # --- END NEW SECTION ---
+    else:
+        print(f"Database already contains {job_count} jobs. Skipping population.")
+    # --- END ---
 
     conn.commit()
     conn.close()
+    print("Database initialization complete.")
 
 
 # ----------------------------------------------------------------------
-#  --- NEW: FUNCTION TO POPULATE DATABASE ---
+#  --- FUNCTION TO POPULATE DATABASE ---
 # ----------------------------------------------------------------------
 def _populate_initial_data(conn: sqlite3.Connection):
     cur = conn.cursor()
@@ -322,7 +335,7 @@ def _populate_initial_data(conn: sqlite3.Connection):
         # 11. MultiChoice (Media)
         cur.execute("""
             INSERT INTO businesses (name, industry, description, website, address) VALUES
-            ('MultiChoice', 'Media & Entertainment', 'Owner of DStv and Showmax.', 'https.www.multichoice.com', '144 Bram Fischer Drive, Randburg, Johannesburg, 2194')
+            ('MultiChoice', 'Media & Entertainment', 'Owner of DStv and Showmax.', 'https://www.multichoice.com', '144 Bram Fischer Drive, Randburg, Johannesburg, 2194')
         """)
         cur.execute("""
             INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES
@@ -383,21 +396,13 @@ def _populate_initial_data(conn: sqlite3.Connection):
 
 # ----------------------------------------------------------------------
 #  All other functions (userExists, getUsersDetails, getUserById, etc.)
-#  ... (rest of your file) ...
 # ----------------------------------------------------------------------
 
-# ... (paste all your other functions from db.py here) ...
-
-# ----------------------------------------------------------------------
-#  PUBLIC HELPERS (used from main.py)
-# ----------------------------------------------------------------------
 def userExists(conn: sqlite3.Connection, username: str, email: str) -> bool:
     cur = conn.cursor()
     cur.execute("SELECT 1 FROM users WHERE username = ? OR email = ?", (username, email))
     return cur.fetchone() is not None
 
-
-# ---------- LOGIN ----------
 def getUsersDetails(conn: sqlite3.Connection, uore: str) -> Optional[Dict[str, Any]]:
     cur = conn.cursor()
     cur.execute(
@@ -412,8 +417,6 @@ def getUsersDetails(conn: sqlite3.Connection, uore: str) -> Optional[Dict[str, A
     d["id"] = d.pop("user_id")
     return d
 
-
-# ---------- PROFILE ----------
 def getUserById(conn: sqlite3.Connection, user_id: int) -> Optional[Dict[str, Any]]:
     cur = conn.cursor()
     cur.execute(
@@ -428,7 +431,6 @@ def getUserById(conn: sqlite3.Connection, user_id: int) -> Optional[Dict[str, An
     if not row:
         return None
     d = dict(row)
-    # Transform snake_case (DB) to camelCase (API)
     return {
         "userId": d["user_id"],
         "username": d["username"],
@@ -449,7 +451,6 @@ def updateUserProfile(conn: sqlite3.Connection, profile_data: Dict[str, Any]) ->
     cur = conn.cursor()
     fields: list[str] = []
     values: list[Any] = []
-
     field_map = {
         'profileName': 'profile_name',
         'profileBio': 'profile_bio',
@@ -458,32 +459,24 @@ def updateUserProfile(conn: sqlite3.Connection, profile_data: Dict[str, Any]) ->
         'sideProjects': 'side_projects',
         'profileImage': 'profile_image'
     }
-
     for api_key, db_key in field_map.items():
         if api_key in profile_data:
             fields.append(f"{db_key} = ?")
             values.append(profile_data[api_key])
-
     if 'updatedAt' in profile_data:
         fields.append("updated_at = ?")
         values.append(profile_data['updatedAt'])
-
     if not fields:
         return False 
-
     user_id = profile_data.get("userId")
     if not user_id:
         return False 
-
     values.append(user_id)
     query = f"UPDATE users SET {', '.join(fields)} WHERE user_id = ?"
     cur.execute(query, tuple(values))
     conn.commit()
     return cur.rowcount > 0
 
-# ----------------------------------------------------------------------
-#  CV HELPERS
-# ----------------------------------------------------------------------
 def _getUserCVs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
     cur = conn.cursor()
     cur.execute(
@@ -494,7 +487,6 @@ def _getUserCVs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
     )
     columns = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
-
     result: List[Dict[str, Any]] = []
     for row in rows:
         d = dict(zip(columns, row))
@@ -510,10 +502,8 @@ def _getUserCVs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
         })
     return result
 
-
 def getUserCVs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
     return _getUserCVs(conn, user_id)
-
 
 def addCV(conn: sqlite3.Connection, cv_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
@@ -534,13 +524,11 @@ def addCV(conn: sqlite3.Connection, cv_data: Dict[str, Any]) -> Optional[int]:
     conn.commit()
     return cur.lastrowid
 
-
 def deleteCV(conn: sqlite3.Connection, cv_id: int, user_id: int) -> bool:
     cur = conn.cursor()
     cur.execute("DELETE FROM cvs WHERE cv_id = ? AND user_id = ?", (cv_id, user_id))
     conn.commit()
     return cur.rowcount > 0
-
 
 def setPrimaryCV(conn: sqlite3.Connection, cv_id: int, user_id: int) -> bool:
     cur = conn.cursor()
@@ -551,10 +539,6 @@ def setPrimaryCV(conn: sqlite3.Connection, cv_id: int, user_id: int) -> bool:
     conn.commit()
     return cur.rowcount > 0
 
-
-# ----------------------------------------------------------------------
-#  QUALIFICATIONS
-# ----------------------------------------------------------------------
 def _getUserQualifications(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
     cur = conn.cursor()
     cur.execute(
@@ -568,7 +552,6 @@ def _getUserQualifications(conn: sqlite3.Connection, user_id: int) -> List[Dict[
     )
     columns = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
-
     result: List[Dict[str, Any]] = []
     for row in rows:
         d = dict(zip(columns, row))
@@ -582,16 +565,14 @@ def _getUserQualifications(conn: sqlite3.Connection, user_id: int) -> List[Dict[
             "startDate": d.get("start_date"),
             "endDate": d.get("end_date"),
             "isCurrent": bool(d["is_current"]),
-            "gradeOrGpa": d.get("grade_or_gpa"),
+            "gradeOrGgpa": d.get("grade_or_gpa"),
             "description": d.get("description"),
             "createdAt": d["created_at"],
         })
     return result
 
-
 def getUserQualifications(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
     return _getUserQualifications(conn, user_id)
-
 
 def addQualification(conn: sqlite3.Connection, qual_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
@@ -617,7 +598,6 @@ def addQualification(conn: sqlite3.Connection, qual_data: Dict[str, Any]) -> Opt
     )
     conn.commit()
     return cur.lastrowid
-
 
 def updateQualification(
     conn: sqlite3.Connection,
@@ -646,16 +626,13 @@ def updateQualification(
                 values.append(int(qual_data[api]))
             else:
                 values.append(qual_data[api])
-
     if not fields:
         return False
-
     values.extend([qualification_id, user_id])
     query = f"UPDATE qualifications SET {', '.join(fields)} WHERE qualification_id = ? AND user_id = ?"
     cur.execute(query, tuple(values))
     conn.commit()
     return cur.rowcount > 0
-
 
 def deleteQualification(conn: sqlite3.Connection, qualification_id: int, user_id: int) -> bool:
     cur = conn.cursor()
@@ -666,23 +643,17 @@ def deleteQualification(conn: sqlite3.Connection, qualification_id: int, user_id
     conn.commit()
     return cur.rowcount > 0
 
-
-# ----------------------------------------------------------------------
-#  STATS & SAVED JOBS
-# ----------------------------------------------------------------------
 def getUserApplicationsCount(conn: sqlite3.Connection, user_id: int) -> int:
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM job_applications WHERE user_id = ?", (user_id,))
     row = cur.fetchone()
     return row[0] if row else 0
 
-
 def getUserSavedJobsCount(conn: sqlite3.Connection, user_id: int) -> int:
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM saved_jobs WHERE user_id = ?", (user_id,))
     row = cur.fetchone()
     return row[0] if row else 0
-
 
 def _getSavedJobs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
     cur = conn.cursor()
@@ -695,7 +666,6 @@ def _getSavedJobs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]
     )
     columns: List[str] = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
-
     result: List[Dict[str, Any]] = []
     for row in rows:
         d: Dict[str, Any] = dict(zip(columns, row))
@@ -711,10 +681,8 @@ def _getSavedJobs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]
         })
     return result
 
-
 def getSavedJobs(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
     return _getSavedJobs(conn, user_id)
-
 
 def addSavedJob(conn: sqlite3.Connection, job_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
@@ -736,7 +704,6 @@ def addSavedJob(conn: sqlite3.Connection, job_data: Dict[str, Any]) -> Optional[
     conn.commit()
     return cur.lastrowid
 
-
 def deleteSavedJob(conn: sqlite3.Connection, saved_job_id: int, user_id: int) -> bool:
     cur = conn.cursor()
     cur.execute(
@@ -746,10 +713,6 @@ def deleteSavedJob(conn: sqlite3.Connection, saved_job_id: int, user_id: int) ->
     conn.commit()
     return cur.rowcount > 0
 
-
-# ----------------------------------------------------------------------
-#  BUSINESS & JOB LISTINGS
-# ----------------------------------------------------------------------
 def addBusiness(conn: sqlite3.Connection, biz_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
     cur.execute(
@@ -767,7 +730,6 @@ def addBusiness(conn: sqlite3.Connection, biz_data: Dict[str, Any]) -> Optional[
     )
     conn.commit()
     return cur.lastrowid
-
 
 def addJob(conn: sqlite3.Connection, job_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
@@ -793,8 +755,6 @@ def addJob(conn: sqlite3.Connection, job_data: Dict[str, Any]) -> Optional[int]:
     conn.commit()
     return cur.lastrowid
 
-
-# --- THIS IS THE FUNCTION YOUR 'nearme' PAGE CALLS ---
 def getActiveJobs(conn: sqlite3.Connection, limit: int, offset: int) -> List[Dict[str, Any]]:
     cur = conn.cursor()
     cur.execute(
@@ -816,7 +776,6 @@ def getActiveJobs(conn: sqlite3.Connection, limit: int, offset: int) -> List[Dic
     )
     columns: List[str] = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
-
     result: List[Dict[str, Any]] = []
     for row in rows:
         d: Dict[str, Any] = dict(zip(columns, row))
@@ -836,7 +795,6 @@ def getActiveJobs(conn: sqlite3.Connection, limit: int, offset: int) -> List[Dic
             "businessWebsite": d.get("business_website"),
         })
     return result
-
 
 def getJobById(conn: sqlite3.Connection, job_id: int) -> Optional[Dict[str, Any]]:
     cur = conn.cursor()
@@ -860,7 +818,6 @@ def getJobById(conn: sqlite3.Connection, job_id: int) -> Optional[Dict[str, Any]
     row = cur.fetchone()
     if not row:
         return None
-
     d: Dict[str, Any] = dict(row)
     return {
         "jobId": d["job_id"],
@@ -881,7 +838,6 @@ def getJobById(conn: sqlite3.Connection, job_id: int) -> Optional[Dict[str, Any]
         "businessDescription": d.get("business_description"),
     }
 
-# --- THIS IS THE FUNCTION YOUR 'JobSearch' PAGE CALLS ---
 def searchJobs(
     conn: sqlite3.Connection,
     query: Optional[str] = None,
@@ -892,7 +848,6 @@ def searchJobs(
     offset: int = 0
 ) -> List[Dict[str, Any]]:
     cur = conn.cursor()
-    
     base_query = """
         SELECT
             j.job_id, j.job_title, j.description, j.requirements,
@@ -906,7 +861,6 @@ def searchJobs(
         WHERE j.is_active = 1
     """
     params: List[Any] = []
-    
     if query:
         search_term = f"%{query.lower()}%"
         base_query += """
@@ -919,26 +873,20 @@ def searchJobs(
             )
         """
         params.extend([search_term, search_term, search_term, search_term, search_term])
-        
     if employment_type:
         base_query += " AND j.employment_type = ?"
         params.append(employment_type)
-        
     if work_arrangement:
         base_query += " AND j.work_arrangement = ?"
         params.append(work_arrangement)
-        
     if location:
         base_query += " AND LOWER(j.location) LIKE ?"
         params.append(f"%{location.lower()}%")
-
     base_query += " ORDER BY j.date_posted DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
-
     cur.execute(base_query, tuple(params))
     columns: List[str] = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
-
     result: List[Dict[str, Any]] = []
     for row in rows:
         d: Dict[str, Any] = dict(zip(columns, row))
@@ -959,21 +907,16 @@ def searchJobs(
         })
     return result
 
-# ----------------------------------------------------------------------
-#  UNION HELPERS
-# ----------------------------------------------------------------------
 def unionExists(conn: sqlite3.Connection, register_num: str) -> bool:
     cur = conn.cursor()
     cur.execute("SELECT 1 FROM unions WHERE register_num = ?", (register_num,))
     return cur.fetchone() is not None
-
 
 def getUnions(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
     cur = conn.cursor()
     cur.execute("SELECT * FROM unions")
     columns = [desc[0] for desc in cur.description]
     return [dict(zip(columns, row)) for row in cur.fetchall()]
-
 
 def createUnion(conn: sqlite3.Connection, union_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
@@ -992,7 +935,6 @@ def createUnion(conn: sqlite3.Connection, union_data: Dict[str, Any]) -> Optiona
     conn.commit()
     return cur.lastrowid
 
-
 def workerInUnion(conn: sqlite3.Connection, worker_id: int, union_id: int) -> bool:
     cur = conn.cursor()
     cur.execute(
@@ -1000,7 +942,6 @@ def workerInUnion(conn: sqlite3.Connection, worker_id: int, union_id: int) -> bo
         (worker_id, union_id),
     )
     return cur.fetchone() is not None
-
 
 def getUnionMembers(conn: sqlite3.Connection, union_id: Optional[int] = None) -> List[Dict[str, Any]]:
     cur = conn.cursor()
@@ -1010,7 +951,6 @@ def getUnionMembers(conn: sqlite3.Connection, union_id: Optional[int] = None) ->
         cur.execute("SELECT * FROM union_members")
     columns = [desc[0] for desc in cur.description]
     return [dict(zip(columns, row)) for row in cur.fetchall()]
-
 
 def addUnionMember(conn: sqlite3.Connection, member_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
