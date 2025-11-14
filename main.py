@@ -3,6 +3,10 @@ from contextlib import asynccontextmanager
 from typing import Any, List, Optional
 import os
 import uuid
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import requests
 
 from fastapi import FastAPI, HTTPException, Depends, Request, File, UploadFile
 from fastapi.responses import JSONResponse
@@ -149,6 +153,149 @@ def requireEndpointToken(expected_token: str):
 
 pwd = CryptContext(schemes=["argon2"], deprecated="auto")
 
+# ========== EMAIL CONFIGURATION ==========
+def send_reset_code_email(to_email: str, code: str) -> bool:
+    """Send password reset code via email using SendGrid API (primary) or SMTP (fallback)."""
+    
+    # Try SendGrid API first (recommended for production)
+    sendgrid_api_key = os.environ.get("SENDGRID_API_KEY", "")
+    if sendgrid_api_key:
+        try:
+            from_email = os.environ.get("FROM_EMAIL", "noreply@workwise.app")
+            
+            url = "https://api.sendgrid.com/v3/mail/send"
+            headers = {
+                "Authorization": f"Bearer {sendgrid_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            html_content = f"""
+            <html>
+              <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+                  <h2 style="color: #4CAF50;">WorkWise Password Reset</h2>
+                  <p>Hi,</p>
+                  <p>Your password reset code is:</p>
+                  <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
+                    {code}
+                  </div>
+                  <p><strong>This code will expire in 15 minutes.</strong></p>
+                  <p>If you didn't request this, please ignore this email.</p>
+                  <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                  <p style="color: #777; font-size: 12px;">Best regards,<br>WorkWise Team</p>
+                </div>
+              </body>
+            </html>
+            """
+            
+            text_content = f"""
+            Hi,
+            
+            Your WorkWise password reset code is: {code}
+            
+            This code will expire in 15 minutes.
+            
+            If you didn't request this, please ignore this email.
+            
+            Best regards,
+            WorkWise Team
+            """
+            
+            payload = {
+                "personalizations": [{
+                    "to": [{"email": to_email}],
+                    "subject": "WorkWise Password Reset Code"
+                }],
+                "from": {"email": from_email, "name": "WorkWise"},
+                "content": [
+                    {"type": "text/plain", "value": text_content},
+                    {"type": "text/html", "value": html_content}
+                ]
+            }
+            
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
+            
+            if response.status_code == 202:
+                print(f"✅ SendGrid: Reset code email sent successfully to {to_email}")
+                return True
+            else:
+                print(f"❌ SendGrid API error ({response.status_code}): {response.text}")
+                print(f"📧 Falling back to SMTP...")
+        
+        except Exception as e:
+            print(f"❌ SendGrid API failed: {e}")
+            print(f"📧 Falling back to SMTP...")
+    
+    # Fallback to SMTP (Gmail, Mailgun, etc.)
+    try:
+        smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+        smtp_user = os.environ.get("SMTP_USER", "")
+        smtp_password = os.environ.get("SMTP_PASSWORD", "")
+        from_email = os.environ.get("FROM_EMAIL", smtp_user)
+        
+        if not smtp_user or not smtp_password:
+            print("❌ Email credentials not configured. Set SENDGRID_API_KEY or SMTP credentials.")
+            print(f"📧 Reset code for {to_email}: {code} (NOT SENT - Configure email service)")
+            return False
+        
+        # Create message
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "WorkWise Password Reset Code"
+        msg["From"] = from_email
+        msg["To"] = to_email
+        
+        text = f"""
+        Hi,
+        
+        Your WorkWise password reset code is: {code}
+        
+        This code will expire in 15 minutes.
+        
+        If you didn't request this, please ignore this email.
+        
+        Best regards,
+        WorkWise Team
+        """
+        
+        html = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+              <h2 style="color: #4CAF50;">WorkWise Password Reset</h2>
+              <p>Hi,</p>
+              <p>Your password reset code is:</p>
+              <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
+                {code}
+              </div>
+              <p><strong>This code will expire in 15 minutes.</strong></p>
+              <p>If you didn't request this, please ignore this email.</p>
+              <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+              <p style="color: #777; font-size: 12px;">Best regards,<br>WorkWise Team</p>
+            </div>
+          </body>
+        </html>
+        """
+        
+        part1 = MIMEText(text, "plain")
+        part2 = MIMEText(html, "html")
+        msg.attach(part1)
+        msg.attach(part2)
+        
+        # Send email via SMTP
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.send_message(msg)
+        
+        print(f"✅ SMTP: Reset code email sent successfully to {to_email}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to send email to {to_email}: {e}")
+        print(f"📧 Reset code for {to_email}: {code} (NOT SENT - Error occurred)")
+        return False
+
 # ... (Exception handler and ping are unchanged) ...
 @app.exception_handler(HTTPException)
 async def customHttpExceptionHandler(request: Request, exc: HTTPException):
@@ -225,10 +372,8 @@ def forgot_password(body: ForgotPasswordIn):
         # Generate and store code
         code = create_reset_code(conn, body.email)
         
-        # --- In a real app, you would email the code here ---
-        # send_email(body.email, "Your WorkWise Password Reset Code", f"Your code is: {code}")
-        print(f"Password reset code for {body.email} is {code} (NOT SENT)")
-        # ---
+        # Send email
+        send_reset_code_email(body.email, code)
         
         return ForgotPasswordOut(message="If this email exists, a reset code has been sent.")
     finally:
