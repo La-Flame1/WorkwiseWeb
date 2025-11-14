@@ -194,3 +194,32 @@ class UnionMemberIn(BaseModel):
 
 class UnionMemberOut(UnionMemberIn):
     membershipId: int
+
+# ========== PASSWORD RESET MODELS ==========
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+class ForgotPasswordOut(BaseModel):
+    message: str
+
+class VerifyResetCodeIn(BaseModel):
+    email: EmailStr
+    code: str
+
+class VerifyResetCodeOut(BaseModel):
+    valid: bool
+    message: str
+
+class ResetPasswordIn(BaseModel):
+    email: EmailStr
+    code: str
+    newPassword: str
+
+class ResetPasswordOut(BaseModel):
+    success: bool
+    message: str
+
+# A generic response model, useful for delete actions
+class ApiResponse(BaseModel):
+    message: str
