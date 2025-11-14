@@ -18,6 +18,8 @@ from Models.models import (
     CVOut, CVUploadOut,
     QualificationIn, QualificationOut, QualificationUpdateIn,
     UserStatsOut, SavedJobIn, SavedJobOut,
+    # [NEW] Import Business and Job models
+    BusinessIn, BusinessOut, JobIn, JobOut, JobListingOut, JobDetailOut,
     UnionIn, UnionOut, UnionMemberIn, UnionMemberOut
 )
 
@@ -26,6 +28,8 @@ from Database.db import (
     updateUserProfile, getUserCVs, addCV, deleteCV, setPrimaryCV,
     getUserQualifications, addQualification, updateQualification, deleteQualification,
     getUserApplicationsCount, getUserSavedJobsCount, getSavedJobs, addSavedJob, deleteSavedJob,
+    # [NEW] Import Business and Job functions
+    addBusiness, addJob, getActiveJobs, getJobById,
     unionExists, getUnions, workerInUnion, getUnionMembers
 )
 
@@ -53,6 +57,9 @@ app = FastAPI(
         {"name": "qualifications", "description": "Educational qualifications"},
         {"name": "stats", "description": "User statistics"},
         {"name": "saved_jobs", "description": "Saved jobs management"},
+        # [NEW] Add tags for businesses and jobs
+        {"name": "businesses", "description": "Manage businesses (Admin)"},
+        {"name": "jobs", "description": "Manage and view job listings"},
         {"name": "unions", "description": "Union management"},
         {"name": "union_members", "description": "Union membership management"}
     ]
@@ -93,6 +100,12 @@ endpointTokens = {
     "POST:/v1/workwise/saved-jobs": "SAVEDADDTOK345",
     "DELETE:/v1/workwise/saved-jobs": "SAVEDDELETETOK678",
     
+    # [NEW] Job and Business Tokens
+    "POST:/v1/workwise/businesses": "BUSIADDTOK111",
+    "POST:/v1/workwise/jobs": "JOBADDTOK222",
+    "GET:/v1/workwise/jobs": "JOBLISTTOK333",
+    "GET:/v1/workwise/jobs/detail": "JOBDETAILTOK444",
+
     # Unions
     "GET:/v1/workwise/unions": "UNIONLISTTOK456",
     "POST:/v1/workwise/unions": "UNIONCREATETOK789",
@@ -359,7 +372,7 @@ def removeCV(user_id: int, cv_id: int):
         if deleteCV(conn, cv_id, user_id):
             return {"message": "CV deleted successfully"}
         else:
-            raise HTTPException(status_code=404, detail="CV not found")
+            raise HTTPException(status_code=44, detail="CV not found")
     finally:
         conn.close()
 
@@ -604,6 +617,104 @@ def removeSavedJob(user_id: int, saved_job_id: int):
             return {"message": "Saved job deleted successfully"}
         else:
             raise HTTPException(status_code=404, detail="Saved job not found")
+    finally:
+        conn.close()
+
+# ========== [NEW] BUSINESS & JOB ENDPOINTS ==========
+
+@app.post(
+    "/v1/workwise/businesses",
+    response_model=BusinessOut,
+    tags=["businesses"],
+    dependencies=[Depends(requireEndpointToken(endpointTokens[key("POST", "/v1/workwise/businesses")]))]
+)
+def create_business(body: BusinessIn):
+    """
+    Create a new business profile. (Admin/Protected)
+    """
+    conn = getDatabase()
+    try:
+        created_at = datetime.now(timezone.utc).isoformat()
+        biz_data = body.model_dump()
+        biz_data["createdAt"] = created_at
+        
+        biz_id = addBusiness(conn, biz_data)
+        if not biz_id:
+            raise HTTPException(status_code=500, detail="Failed to create business")
+        
+        return BusinessOut(
+            businessId=biz_id,
+            createdAt=created_at,
+            **body.model_dump()
+        )
+    finally:
+        conn.close()
+
+@app.post(
+    "/v1/workwise/jobs",
+    response_model=JobOut,
+    tags=["jobs"],
+    dependencies=[Depends(requireEndpointToken(endpointTokens[key("POST", "/v1/workwise/jobs")]))]
+)
+def create_job(body: JobIn):
+    """
+    Create a new job listing for a business. (Admin/Protected)
+    """
+    conn = getDatabase()
+    try:
+        date_posted = datetime.now(timezone.utc).isoformat()
+        job_data = body.model_dump()
+        job_data["datePosted"] = date_posted
+        job_data["isActive"] = True
+        
+        job_id = addJob(conn, job_data)
+        if not job_id:
+            raise HTTPException(status_code=500, detail="Failed to create job")
+        
+        return JobOut(
+            jobId=job_id,
+            datePosted=date_posted,
+            isActive=True,
+            **body.model_dump()
+        )
+    finally:
+        conn.close()
+
+@app.get(
+    "/v1/workwise/jobs",
+    response_model=List[JobListingOut],
+    tags=["jobs"],
+    dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/jobs")]))]
+)
+def list_active_jobs(limit: int = 20, offset: int = 0):
+    """
+    Get a paginated list of all active, public job listings.
+    This is the main endpoint for the app's job board.
+    """
+    conn = getDatabase()
+    try:
+        jobs = getActiveJobs(conn, limit, offset)
+        return [JobListingOut(**job) for job in jobs]
+    finally:
+        conn.close()
+
+@app.get(
+    "/v1/workwise/jobs/detail/{job_id}",
+    response_model=JobDetailOut,
+    tags=["jobs"],
+    dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/jobs/detail")]))]
+)
+def get_job_details(job_id: int):
+    """
+    Get the full details for a single job listing, including
+    extended information about the business.
+    """
+    conn = getDatabase()
+    try:
+        job = getJobById(conn, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return JobDetailOut(**job)
     finally:
         conn.close()
 

@@ -123,6 +123,36 @@ def initDatabase() -> None:
         )
     ''')
 
+    # ---- [NEW] BUSINESSES -------------------------------------------
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS businesses (
+            business_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            name          TEXT NOT NULL,
+            industry      TEXT,
+            description   TEXT,
+            website       TEXT,
+            address       TEXT,
+            created_at    TEXT DEFAULT (datetime('now'))
+        )
+    ''')
+
+    # ---- [NEW] JOBS -------------------------------------------------
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS jobs (
+            job_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id     INTEGER NOT NULL,
+            job_title       TEXT NOT NULL,
+            description     TEXT NOT NULL,
+            requirements    TEXT,
+            salary_range    TEXT,
+            location        TEXT,
+            job_type        TEXT,
+            date_posted     TEXT DEFAULT (datetime('now')),
+            is_active       INTEGER DEFAULT 1,
+            FOREIGN KEY (business_id) REFERENCES businesses (business_id) ON DELETE CASCADE
+        )
+    ''')
+
     # ---- UNIONS -----------------------------------------------------
     cur.execute('''
         CREATE TABLE IF NOT EXISTS unions (
@@ -523,6 +553,146 @@ def deleteSavedJob(conn: sqlite3.Connection, saved_job_id: int, user_id: int) ->
     )
     conn.commit()
     return cur.rowcount > 0
+
+
+# ----------------------------------------------------------------------
+#  [NEW] BUSINESS & JOB LISTINGS
+# ----------------------------------------------------------------------
+def addBusiness(conn: sqlite3.Connection, biz_data: Dict[str, Any]) -> Optional[int]:
+    cur = conn.cursor()
+    cur.execute(
+        """INSERT INTO businesses
+           (name, industry, description, website, address, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (
+            biz_data["name"],
+            biz_data.get("industry"),
+            biz_data.get("description"),
+            biz_data.get("website"),
+            biz_data.get("address"),
+            biz_data.get("createdAt", datetime.now(timezone.utc).isoformat()),
+        ),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def addJob(conn: sqlite3.Connection, job_data: Dict[str, Any]) -> Optional[int]:
+    cur = conn.cursor()
+    cur.execute(
+        """INSERT INTO jobs
+           (business_id, job_title, description, requirements,
+            salary_range, location, job_type, date_posted, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            job_data["businessId"],
+            job_data["jobTitle"],
+            job_data["description"],
+            job_data.get("requirements"),
+            job_data.get("salaryRange"),
+            job_data.get("location"),
+            job_data.get("jobType"),
+            job_data.get("datePosted", datetime.now(timezone.utc).isoformat()),
+            int(job_data.get("isActive", True)),
+        ),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def getActiveJobs(conn: sqlite3.Connection, limit: int, offset: int) -> List[Dict[str, Any]]:
+    """
+    Gets a paginated list of all active jobs, joined with business details.
+    This is for the main job board list in the app.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT
+            j.job_id, j.job_title, j.description, j.requirements,
+            j.salary_range, j.location, j.job_type, j.date_posted,
+            j.business_id,
+            b.name AS business_name,
+            b.address AS business_address,
+            b.website AS business_website
+        FROM jobs j
+        JOIN businesses b ON j.business_id = b.business_id
+        WHERE j.is_active = 1
+        ORDER BY j.date_posted DESC
+        LIMIT ? OFFSET ?
+        """,
+        (limit, offset),
+    )
+    columns: List[str] = [desc[0] for desc in cur.description]
+    rows = cur.fetchall()
+
+    result: List[Dict[str, Any]] = []
+    for row in rows:
+        d: Dict[str, Any] = dict(zip(columns, row))
+        # Transform snake_case (DB) to camelCase (API)
+        result.append({
+            "jobId": d["job_id"],
+            "jobTitle": d["job_title"],
+            "description": d["description"],
+            "requirements": d.get("requirements"),
+            "salaryRange": d.get("salary_range"),
+            "location": d.get("location"),
+            "jobType": d.get("job_type"),
+            "datePosted": d["date_posted"],
+            "businessId": d["business_id"],
+            "businessName": d.get("business_name"),
+            "businessAddress": d.get("business_address"),
+            "businessWebsite": d.get("business_website"),
+        })
+    return result
+
+
+def getJobById(conn: sqlite3.Connection, job_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Gets a single job, joined with business details.
+    This is for the job detail screen in the app.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT
+            j.job_id, j.job_title, j.description, j.requirements,
+            j.salary_range, j.location, j.job_type, j.date_posted,
+            j.business_id, j.is_active,
+            b.name AS business_name,
+            b.address AS business_address,
+            b.website AS business_website,
+            b.industry AS business_industry,
+            b.description AS business_description
+        FROM jobs j
+        JOIN businesses b ON j.business_id = b.business_id
+        WHERE j.job_id = ?
+        """,
+        (job_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    d: Dict[str, Any] = dict(row)
+    # Transform snake_case (DB) to camelCase (API)
+    return {
+        "jobId": d["job_id"],
+        "jobTitle": d["job_title"],
+        "description": d["description"],
+        "requirements": d.get("requirements"),
+        "salaryRange": d.get("salary_range"),
+        "location": d.get("location"),
+        "jobType": d.get("job_type"),
+        "datePosted": d["date_posted"],
+        "isActive": bool(d["is_active"]),
+        "businessId": d["business_id"],
+        "businessName": d.get("business_name"),
+        "businessAddress": d.get("business_address"),
+        "businessWebsite": d.get("business_website"),
+        "businessIndustry": d.get("business_industry"),
+        "businessDescription": d.get("business_description"),
+    }
 
 
 # ----------------------------------------------------------------------

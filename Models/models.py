@@ -116,6 +116,60 @@ class SavedJobOut(SavedJobIn):
     userId: int
     savedAt: str
 
+# ========== [NEW] BUSINESS & JOB MODELS ==========
+class BusinessIn(BaseModel):
+    name: str
+    industry: Optional[str] = None
+    description: Optional[str] = None
+    website: Optional[str] = None
+    address: Optional[str] = None
+
+class BusinessOut(BusinessIn):
+    businessId: int
+    createdAt: str
+
+class JobIn(BaseModel):
+    businessId: int
+    jobTitle: str
+    description: str
+    requirements: Optional[str] = None
+    salaryRange: Optional[str] = None
+    location: Optional[str] = None
+    jobType: Optional[str] = None # e.g., "Full-time", "Part-time"
+
+class JobOut(JobIn):
+    jobId: int
+    datePosted: str
+    isActive: bool
+
+class JobListingOut(BaseModel):
+    """
+    Combined model for displaying a job listing in the app.
+    Includes job details and key business details.
+    """
+    jobId: int
+    jobTitle: str
+    description: str
+    requirements: Optional[str] = None
+    salaryRange: Optional[str] = None
+    location: Optional[str] = None
+    jobType: Optional[str] = None
+    datePosted: str
+    businessId: int
+    businessName: str
+    businessAddress: Optional[str] = None
+    businessWebsite: Optional[str] = None
+
+class JobDetailOut(JobListingOut):
+    """
+    Extended model for the job detail screen.
+    Includes full business details.
+    """
+    isActive: bool
+    businessIndustry: Optional[str] = None
+    businessDescription: Optional[str] = None
+
+
 # ========== UNION MODELS ==========
 class UnionIn(BaseModel):
     register_num: str
