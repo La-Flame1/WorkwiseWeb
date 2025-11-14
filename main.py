@@ -18,7 +18,6 @@ from Models.models import (
     CVOut, CVUploadOut,
     QualificationIn, QualificationOut, QualificationUpdateIn,
     UserStatsOut, SavedJobIn, SavedJobOut,
-    # [NEW] Import Business and Job models
     BusinessIn, BusinessOut, JobIn, JobOut, JobListingOut, JobDetailOut,
     UnionIn, UnionOut, UnionMemberIn, UnionMemberOut
 )
@@ -28,7 +27,6 @@ from Database.db import (
     updateUserProfile, getUserCVs, addCV, deleteCV, setPrimaryCV,
     getUserQualifications, addQualification, updateQualification, deleteQualification,
     getUserApplicationsCount, getUserSavedJobsCount, getSavedJobs, addSavedJob, deleteSavedJob,
-    # [NEW] Import Business and Job functions
     addBusiness, addJob, getActiveJobs, getJobById,
     unionExists, getUnions, workerInUnion, getUnionMembers
 )
@@ -42,7 +40,7 @@ os.makedirs(os.path.join(UPLOAD_DIR, "cvs"), exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    initDatabase()
+    initDatabase() # This will now work locally
     yield
     # Shutdown (if needed in the future)
 
@@ -57,7 +55,6 @@ app = FastAPI(
         {"name": "qualifications", "description": "Educational qualifications"},
         {"name": "stats", "description": "User statistics"},
         {"name": "saved_jobs", "description": "Saved jobs management"},
-        # [NEW] Add tags for businesses and jobs
         {"name": "businesses", "description": "Manage businesses (Admin)"},
         {"name": "jobs", "description": "Manage and view job listings"},
         {"name": "unions", "description": "Union management"},
@@ -100,7 +97,7 @@ endpointTokens = {
     "POST:/v1/workwise/saved-jobs": "SAVEDADDTOK345",
     "DELETE:/v1/workwise/saved-jobs": "SAVEDDELETETOK678",
     
-    # [NEW] Job and Business Tokens
+    # Job and Business Tokens
     "POST:/v1/workwise/businesses": "BUSIADDTOK111",
     "POST:/v1/workwise/jobs": "JOBADDTOK222",
     "GET:/v1/workwise/jobs": "JOBLISTTOK333",
@@ -185,12 +182,12 @@ def register(body: RegisterIn):
 def login(body: LoginIn):
     conn = getDatabase()
     try:
-        user = getUsersDetails(conn, body.usernameOrEmail)   # <-- now returns dict with "id"
+        user = getUsersDetails(conn, body.usernameOrEmail)
         if not user or not pwd.verify(body.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         return LoginOut(
-            userId=user["id"],          # <-- works
+            userId=user["id"],
             username=user["username"],
             email=user["email"],
             role=user["role"]
@@ -205,7 +202,7 @@ def login(body: LoginIn):
     tags=["profile"],
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("PUT", "/v1/workwise/profile")]))]
 )
-def updateUserProfileEndpoint(user_id: int, update: UserProfileUpdateIn): # Renamed to avoid clash
+def updateUserProfileEndpoint(user_id: int, update: UserProfileUpdateIn):
     conn = getDatabase()
     try:
         user = getUserById(conn, user_id)
@@ -224,14 +221,12 @@ def updateUserProfileEndpoint(user_id: int, update: UserProfileUpdateIn): # Rena
         if update.sideProjects is not None:
             updates["sideProjects"] = update.sideProjects
         
-        # Add userId for the db function and set update timestamp
         updates["userId"] = user_id
         updates["updatedAt"] = datetime.now(timezone.utc).isoformat()
         
-        if len(updates) > 2: # (userId and updatedAt are always present)
-            updateUserProfile(conn, updates)  # Corrected call
+        if len(updates) > 2:
+            updateUserProfile(conn, updates)
         
-        # Return updated profile by re-fetching
         updated_user_data = getUserById(conn, user_id)
         if not updated_user_data:
             raise HTTPException(status_code=500, detail="Failed to retrieve updated profile")
@@ -269,7 +264,6 @@ def uploadProfileImage(user_id: int, file: UploadFile = File(...)):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Save file
         ext = os.path.splitext(file.filename or "default.png")[1]
         filename = f"{uuid.uuid4()}{ext}"
         path = os.path.join(UPLOAD_DIR, "profile_images", filename)
@@ -278,7 +272,6 @@ def uploadProfileImage(user_id: int, file: UploadFile = File(...)):
             content = file.file.read()
             f.write(content)
         
-        # Update DB
         cur = conn.cursor()
         cur.execute("UPDATE users SET profile_image = ? WHERE user_id = ?", (path, user_id))
         conn.commit()
@@ -298,10 +291,10 @@ def uploadProfileImage(user_id: int, file: UploadFile = File(...)):
     tags=["cv"],
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/cvs")]))]
 )
-def route_list_user_cvs(user_id: int): # Renamed to avoid clash with imported db function
+def route_list_user_cvs(user_id: int):
     conn = getDatabase()
     try:
-        cvs = getUserCVs(conn, user_id) # This now correctly calls the db function
+        cvs = getUserCVs(conn, user_id)
         return [CVOut(
             cvId=cv["cvId"],
             userId=cv["userId"],
@@ -328,7 +321,6 @@ def uploadCV(user_id: int, file: UploadFile = File(...)):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Save file
         ext = os.path.splitext(file.filename or "default.pdf")[1]
         filename = f"{uuid.uuid4()}{ext}"
         path = os.path.join(UPLOAD_DIR, "cvs", filename)
@@ -337,7 +329,6 @@ def uploadCV(user_id: int, file: UploadFile = File(...)):
             content = file.file.read()
             f.write(content)
         
-        # Add to DB
         uploaded_at = datetime.now(timezone.utc).isoformat()
         cv_data: dict[str, Any] = {
             "userId": user_id,
@@ -345,10 +336,10 @@ def uploadCV(user_id: int, file: UploadFile = File(...)):
             "filePath": path,
             "fileSize": os.path.getsize(path),
             "mimeType": file.content_type,
-            "isPrimary": 0,  # Default
+            "isPrimary": 0,
             "uploadedAt": uploaded_at
         }
-        cv_id = addCV(conn, cv_data) # Corrected to pass camelCase keys
+        cv_id = addCV(conn, cv_data)
         if not cv_id:
             raise HTTPException(status_code=500, detail="Failed to upload CV")
         
@@ -372,7 +363,7 @@ def removeCV(user_id: int, cv_id: int):
         if deleteCV(conn, cv_id, user_id):
             return {"message": "CV deleted successfully"}
         else:
-            raise HTTPException(status_code=44, detail="CV not found")
+            raise HTTPException(status_code=404, detail="CV not found")
     finally:
         conn.close()
 
@@ -398,10 +389,10 @@ def makePrimaryCV(user_id: int, cv_id: int):
     tags=["qualifications"],
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/qualifications")]))]
 )
-def route_list_user_qualifications(user_id: int): # Renamed to avoid clash
+def route_list_user_qualifications(user_id: int):
     conn = getDatabase()
     try:
-        quals = getUserQualifications(conn, user_id) # This now correctly calls the db function
+        quals = getUserQualifications(conn, user_id)
         return [QualificationOut(
             qualificationId=q["qualificationId"],
             userId=q["userId"],
@@ -445,7 +436,7 @@ def addUserQualification(user_id: int, body: QualificationIn):
             "description": body.description,
             "createdAt": datetime.now(timezone.utc).isoformat()
         }
-        qual_id = addQualification(conn, qual_data) # Corrected to pass camelCase keys
+        qual_id = addQualification(conn, qual_data)
         if not qual_id:
             raise HTTPException(status_code=500, detail="Failed to add qualification")
         
@@ -472,7 +463,7 @@ def addUserQualification(user_id: int, body: QualificationIn):
     tags=["qualifications"],
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("PUT", "/v1/workwise/qualifications")]))]
 )
-def updateUserQualification(user_id: int, qualification_id: int, body: QualificationUpdateIn): # This name is fine, no import clash
+def updateUserQualification(user_id: int, qualification_id: int, body: QualificationUpdateIn):
     conn = getDatabase()
     try:
         updates: dict[str, Any] = {}
@@ -490,8 +481,7 @@ def updateUserQualification(user_id: int, qualification_id: int, body: Qualifica
             if not updateQualification(conn, qualification_id, user_id, updates):
                 raise HTTPException(status_code=404, detail="Qualification not found or update failed")
         
-        # Fetch the updated (or un-updated) qualification to return it
-        quals = getUserQualifications(conn, user_id) # This now uses the DB function
+        quals = getUserQualifications(conn, user_id)
         updated_qual = next((q for q in quals if q["qualificationId"] == qualification_id), None)
         
         if updated_qual:
@@ -588,7 +578,7 @@ def saveJob(user_id: int, body: SavedJobIn):
             'savedAt': saved_at
         }
         
-        job_id = addSavedJob(conn, job_data) # Corrected to pass camelCase keys
+        job_id = addSavedJob(conn, job_data)
         if not job_id:
             raise HTTPException(status_code=500, detail="Failed to save job")
         
@@ -620,7 +610,7 @@ def removeSavedJob(user_id: int, saved_job_id: int):
     finally:
         conn.close()
 
-# ========== [NEW] BUSINESS & JOB ENDPOINTS ==========
+# ========== BUSINESS & JOB ENDPOINTS ==========
 
 @app.post(
     "/v1/workwise/businesses",
@@ -629,9 +619,6 @@ def removeSavedJob(user_id: int, saved_job_id: int):
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("POST", "/v1/workwise/businesses")]))]
 )
 def create_business(body: BusinessIn):
-    """
-    Create a new business profile. (Admin/Protected)
-    """
     conn = getDatabase()
     try:
         created_at = datetime.now(timezone.utc).isoformat()
@@ -657,15 +644,15 @@ def create_business(body: BusinessIn):
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("POST", "/v1/workwise/jobs")]))]
 )
 def create_job(body: JobIn):
-    """
-    Create a new job listing for a business. (Admin/Protected)
-    """
     conn = getDatabase()
     try:
         date_posted = datetime.now(timezone.utc).isoformat()
-        job_data = body.model_dump()
+        # --- START CHANGE ---
+        # Pass all fields from the JobIn model to the database
+        job_data = body.model_dump() 
         job_data["datePosted"] = date_posted
         job_data["isActive"] = True
+        # --- END CHANGE ---
         
         job_id = addJob(conn, job_data)
         if not job_id:
@@ -687,10 +674,6 @@ def create_job(body: JobIn):
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/jobs")]))]
 )
 def list_active_jobs(limit: int = 20, offset: int = 0):
-    """
-    Get a paginated list of all active, public job listings.
-    This is the main endpoint for the app's job board.
-    """
     conn = getDatabase()
     try:
         jobs = getActiveJobs(conn, limit, offset)
@@ -705,10 +688,6 @@ def list_active_jobs(limit: int = 20, offset: int = 0):
     dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/jobs/detail")]))]
 )
 def get_job_details(job_id: int):
-    """
-    Get the full details for a single job listing, including
-    extended information about the business.
-    """
     conn = getDatabase()
     try:
         job = getJobById(conn, job_id)

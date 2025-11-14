@@ -2,12 +2,24 @@
 import sqlite3
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
+import os 
 
-workwiseDatabase = "databaseWorkwise.db"
+# --- START CHANGE ---
+# Get the path of the directory containing this file (Database/)
+DB_DIR = os.path.dirname(os.path.abspath(__file__))
+# Get the path of the parent directory (WorkwiseWeb/)
+BASE_DIR = os.path.dirname(DB_DIR)
+# Define the local database path in the base project directory
+LOCAL_DB_PATH = os.path.join(BASE_DIR, "databaseWorkwise.db")
+
+# Use the Railway path if DATABASE_FILE_PATH is set, otherwise use the local path
+workwiseDatabase = os.environ.get("DATABASE_FILE_PATH", LOCAL_DB_PATH) 
+# --- END CHANGE ---
 
 
 def getDatabase() -> sqlite3.Connection:
-    conn = sqlite3.connect(workwiseDatabase, timeout=30, check_same_thread=False)
+    # This line will now work locally
+    conn = sqlite3.connect(workwiseDatabase, timeout=30, check_same_thread=False) 
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     return conn
@@ -21,8 +33,16 @@ def _ensure_column_exists(cur: sqlite3.Cursor, table: str, column: str, definiti
     cur.execute(f"PRAGMA table_info({table})")
     cols = [row[1] for row in cur.fetchall()]
     if column not in cols:
+        print(f"Adding column {column} to {table}...")
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-
+    
+def _rename_column_if_exists(cur: sqlite3.Cursor, table: str, old_col: str, new_col: str) -> None:
+    """Renames a column if it exists and the new one doesn't."""
+    cur.execute(f"PRAGMA table_info({table})")
+    cols = [row[1] for row in cur.fetchall()]
+    if old_col in cols and new_col not in cols:
+        print(f"Renaming column {old_col} to {new_col} in {table}...")
+        cur.execute(f"ALTER TABLE {table} RENAME COLUMN {old_col} TO {new_col}")
 
 def initDatabase() -> None:
     conn = getDatabase()
@@ -123,7 +143,7 @@ def initDatabase() -> None:
         )
     ''')
 
-    # ---- [NEW] BUSINESSES -------------------------------------------
+    # ---- BUSINESSES -------------------------------------------
     cur.execute('''
         CREATE TABLE IF NOT EXISTS businesses (
             business_id   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,7 +156,7 @@ def initDatabase() -> None:
         )
     ''')
 
-    # ---- [NEW] JOBS -------------------------------------------------
+    # ---- JOBS -------------------------------------------------
     cur.execute('''
         CREATE TABLE IF NOT EXISTS jobs (
             job_id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,12 +166,17 @@ def initDatabase() -> None:
             requirements    TEXT,
             salary_range    TEXT,
             location        TEXT,
-            job_type        TEXT,
+            job_type        TEXT, -- This will be renamed
             date_posted     TEXT DEFAULT (datetime('now')),
             is_active       INTEGER DEFAULT 1,
             FOREIGN KEY (business_id) REFERENCES businesses (business_id) ON DELETE CASCADE
         )
     ''')
+    
+    # ---- MIGRATE JOBS TABLE FOR FILTERS ---------------------
+    _ensure_column_exists(cur, "jobs", "employment_type", "TEXT")
+    _rename_column_if_exists(cur, "jobs", "job_type", "work_arrangement")
+
 
     # ---- UNIONS -----------------------------------------------------
     cur.execute('''
@@ -556,7 +581,7 @@ def deleteSavedJob(conn: sqlite3.Connection, saved_job_id: int, user_id: int) ->
 
 
 # ----------------------------------------------------------------------
-#  [NEW] BUSINESS & JOB LISTINGS
+#  BUSINESS & JOB LISTINGS
 # ----------------------------------------------------------------------
 def addBusiness(conn: sqlite3.Connection, biz_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
@@ -579,11 +604,13 @@ def addBusiness(conn: sqlite3.Connection, biz_data: Dict[str, Any]) -> Optional[
 
 def addJob(conn: sqlite3.Connection, job_data: Dict[str, Any]) -> Optional[int]:
     cur = conn.cursor()
+    # Updated addJob to include new columns
     cur.execute(
         """INSERT INTO jobs
            (business_id, job_title, description, requirements,
-            salary_range, location, job_type, date_posted, is_active)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            salary_range, location, work_arrangement, employment_type, 
+            date_posted, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             job_data["businessId"],
             job_data["jobTitle"],
@@ -591,7 +618,8 @@ def addJob(conn: sqlite3.Connection, job_data: Dict[str, Any]) -> Optional[int]:
             job_data.get("requirements"),
             job_data.get("salaryRange"),
             job_data.get("location"),
-            job_data.get("jobType"),
+            job_data.get("workArrangement"), # Renamed
+            job_data.get("employmentType"),  # Added
             job_data.get("datePosted", datetime.now(timezone.utc).isoformat()),
             int(job_data.get("isActive", True)),
         ),
@@ -606,12 +634,13 @@ def getActiveJobs(conn: sqlite3.Connection, limit: int, offset: int) -> List[Dic
     This is for the main job board list in the app.
     """
     cur = conn.cursor()
+    # Updated getActiveJobs to select new columns
     cur.execute(
         """
         SELECT
             j.job_id, j.job_title, j.description, j.requirements,
-            j.salary_range, j.location, j.job_type, j.date_posted,
-            j.business_id,
+            j.salary_range, j.location, j.work_arrangement, j.employment_type,
+            j.date_posted, j.business_id,
             b.name AS business_name,
             b.address AS business_address,
             b.website AS business_website
@@ -637,7 +666,8 @@ def getActiveJobs(conn: sqlite3.Connection, limit: int, offset: int) -> List[Dic
             "requirements": d.get("requirements"),
             "salaryRange": d.get("salary_range"),
             "location": d.get("location"),
-            "jobType": d.get("job_type"),
+            "workArrangement": d.get("work_arrangement"), # Renamed
+            "employmentType": d.get("employment_type"),  # Added
             "datePosted": d["date_posted"],
             "businessId": d["business_id"],
             "businessName": d.get("business_name"),
@@ -653,12 +683,13 @@ def getJobById(conn: sqlite3.Connection, job_id: int) -> Optional[Dict[str, Any]
     This is for the job detail screen in the app.
     """
     cur = conn.cursor()
+    # Updated getJobById to select new columns
     cur.execute(
         """
         SELECT
             j.job_id, j.job_title, j.description, j.requirements,
-            j.salary_range, j.location, j.job_type, j.date_posted,
-            j.business_id, j.is_active,
+            j.salary_range, j.location, j.work_arrangement, j.employment_type,
+            j.date_posted, j.business_id, j.is_active,
             b.name AS business_name,
             b.address AS business_address,
             b.website AS business_website,
@@ -683,7 +714,8 @@ def getJobById(conn: sqlite3.Connection, job_id: int) -> Optional[Dict[str, Any]
         "requirements": d.get("requirements"),
         "salaryRange": d.get("salary_range"),
         "location": d.get("location"),
-        "jobType": d.get("job_type"),
+        "workArrangement": d.get("work_arrangement"), # Renamed
+        "employmentType": d.get("employment_type"),  # Added
         "datePosted": d["date_posted"],
         "isActive": bool(d["is_active"]),
         "businessId": d["business_id"],

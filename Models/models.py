@@ -36,7 +36,7 @@ class UserProfileOut(BaseModel):
     profileBio: Optional[str] = None
     phoneNumber: Optional[str] = None
     location: Optional[str] = None
-    sideProjects: Optional[str] = None  # Added for synchronization
+    sideProjects: Optional[str] = None
     createdAt: str
     updatedAt: Optional[str] = None
 
@@ -45,7 +45,7 @@ class UserProfileUpdateIn(BaseModel):
     profileBio: Optional[str] = None
     phoneNumber: Optional[str] = None
     location: Optional[str] = None
-    sideProjects: Optional[str] = None  # Added for synchronization
+    sideProjects: Optional[str] = None
 
 class ProfileImageUploadOut(BaseModel):
     userId: int
@@ -55,7 +55,6 @@ class ProfileImageUploadOut(BaseModel):
 # ========== CV MODELS ==========
 class CVOut(BaseModel):
     cvId: int
-    # Removed duplicate cvId field
     userId: int
     cvName: str
     filePath: str
@@ -72,7 +71,7 @@ class CVUploadOut(BaseModel):
 
 # ========== QUALIFICATION MODELS ==========
 class QualificationIn(BaseModel):
-    qualificationType: str  # e.g., "Matric", "Diploma", "Degree", "Certificate"
+    qualificationType: str
     institution: str
     fieldOfStudy: Optional[str] = None
     qualificationName: str
@@ -116,7 +115,7 @@ class SavedJobOut(SavedJobIn):
     userId: int
     savedAt: str
 
-# ========== [NEW] BUSINESS & JOB MODELS ==========
+# ========== BUSINESS & JOB MODELS ==========
 class BusinessIn(BaseModel):
     name: str
     industry: Optional[str] = None
@@ -135,7 +134,10 @@ class JobIn(BaseModel):
     requirements: Optional[str] = None
     salaryRange: Optional[str] = None
     location: Optional[str] = None
-    jobType: Optional[str] = None # e.g., "Full-time", "Part-time"
+    # --- START CHANGE ---
+    employmentType: Optional[str] = None # e.g., "Full-time", "Contract"
+    workArrangement: Optional[str] = None # e.g., "On-site", "Hybrid", "Remote"
+    # --- END CHANGE ---
 
 class JobOut(JobIn):
     jobId: int
@@ -153,7 +155,10 @@ class JobListingOut(BaseModel):
     requirements: Optional[str] = None
     salaryRange: Optional[str] = None
     location: Optional[str] = None
-    jobType: Optional[str] = None
+    # --- START CHANGE ---
+    employmentType: Optional[str] = None
+    workArrangement: Optional[str] = None
+    # --- END CHANGE ---
     datePosted: str
     businessId: int
     businessName: str
