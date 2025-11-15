@@ -223,3 +223,14 @@ class ResetPasswordOut(BaseModel):
 # A generic response model, useful for delete actions
 class ApiResponse(BaseModel):
     message: str
+
+# ========== SKILLS ASSESSMENT MODELS ==========
+class SkillCategoryOut(BaseModel):
+    skillName: str
+    level: str
+    score: int
+
+class AssessmentHistoryOut(BaseModel):
+    date: str
+    category: str
+    score: int

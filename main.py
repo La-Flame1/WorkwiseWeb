@@ -25,6 +25,7 @@ from Models.models import (
     UserStatsOut, SavedJobIn, SavedJobOut,
     BusinessIn, BusinessOut, JobIn, JobOut, JobListingOut, JobDetailOut,
     UnionIn, UnionOut, UnionMemberIn, UnionMemberOut,
+    SkillCategoryOut, AssessmentHistoryOut,
     # 2. ADD NEW PASSWORD MODELS
     ForgotPasswordIn, ForgotPasswordOut,
     VerifyResetCodeIn, VerifyResetCodeOut,
@@ -38,6 +39,7 @@ from Database.db import (
     getUserApplicationsCount, getUserSavedJobsCount, getSavedJobs, addSavedJob, deleteSavedJob,
     addBusiness, addJob, getActiveJobs, getJobById, searchJobs,
     unionExists, getUnions, workerInUnion, getUnionMembers,
+    getSkillCategories, getAssessmentHistory,
     # 3. ADD NEW DB HELPERS
     emailExists, create_reset_code, verify_reset_code, reset_user_password
 )
@@ -77,6 +79,7 @@ app = FastAPI(
         {"name": "profile", "description": "User profile management"},
         {"name": "cv", "description": "CV/Resume management"},
         {"name": "qualifications", "description": "Educational qualifications"},
+        {"name": "skills", "description": "Skills assessment"},
         {"name": "stats", "description": "User statistics"},
         {"name": "saved_jobs", "description": "Saved jobs management"},
         {"name": "businesses", "description": "Manage businesses (Admin)"},
@@ -133,6 +136,10 @@ endpointTokens = {
     "POST:/v1/workwise/forgot-password": "FORGOTPASSTOK666",
     "POST:/v1/workwise/verify-reset-code": "VERIFYCODETOK777",
     "POST:/v1/workwise/reset-password": "RESETPASSTOK888",
+
+    # Skills
+    "GET:/v1/workwise/skills/categories": "SKILLCATGETTOK901",
+    "GET:/v1/workwise/skills/history": "SKILLHISTGETTOK902",
 
     # Unions
     "GET:/v1/workwise/unions": "UNIONLISTTOK456",
@@ -293,7 +300,7 @@ def send_reset_code_email(to_email: str, code: str) -> bool:
         
     except Exception as e:
         print(f"Failed to send email to {to_email}: {e}")
-        print(f"Reset code for {to_email}: {code} (NOT SENT - Error occurred)")
+        print(f"webReset code for {to_email}: {code} (NOT SENT - Error occurred)")
         return False
 
 # ... (Exception handler and ping are unchanged) ...
@@ -418,6 +425,42 @@ def reset_password(body: ResetPasswordIn):
         conn.close()
 
 # --- END NEW PASSWORD RESET ENDPOINTS ---
+
+
+# ========== SKILLS ENDPOINTS ==========
+@app.get(
+    "/v1/workwise/skills/categories/{user_id}",
+    response_model=List[SkillCategoryOut],
+    tags=["skills"],
+    dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/skills/categories")]))]
+)
+def get_user_skills(user_id: int):
+    conn = getDatabase()
+    try:
+        user = getUserById(conn, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        rows = getSkillCategories(conn, user_id)
+        return [SkillCategoryOut(**row) for row in rows]
+    finally:
+        conn.close()
+
+@app.get(
+    "/v1/workwise/skills/history/{user_id}",
+    response_model=List[AssessmentHistoryOut],
+    tags=["skills"],
+    dependencies=[Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/skills/history")]))]
+)
+def get_user_assessment_history(user_id: int):
+    conn = getDatabase()
+    try:
+        user = getUserById(conn, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        rows = getAssessmentHistory(conn, user_id)
+        return [AssessmentHistoryOut(**row) for row in rows]
+    finally:
+        conn.close()
 
 
 # ========== PROFILE ENDPOINTS ==========

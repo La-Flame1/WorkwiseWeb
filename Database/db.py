@@ -229,6 +229,35 @@ def initDatabase() -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_email_code ON password_reset_codes (email, code, is_used)")
     # --- END NEW TABLE ---
 
+    # --- 4. ADD NEW TABLES FOR SKILLS ASSESSMENT ---
+    # Stores per-skill scoring and level for a user
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS skill_assessments (
+            skill_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id      INTEGER NOT NULL,
+            skill_name   TEXT NOT NULL,
+            level        TEXT NOT NULL,
+            score        INTEGER NOT NULL DEFAULT 0,
+            assessed_at  TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+        )
+    ''')
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_skill_assess_user ON skill_assessments (user_id)")
+
+    # Stores summarized assessment history entries expected by the client
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS assessment_history (
+            history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL,
+            date       TEXT NOT NULL,
+            category   TEXT NOT NULL,
+            score      INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+        )
+    ''')
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_assess_hist_user ON assessment_history (user_id, date)")
+    # --- END SKILLS TABLES ---
+
     # --- AUTO-POPULATE DATABASE ---
     cur.execute("SELECT COUNT(*) FROM jobs")
     job_count = cur.fetchone()[0]
@@ -632,6 +661,37 @@ def addUnionMember(conn: sqlite3.Connection, member_data: Dict[str, Any]) -> Opt
         return cur.lastrowid
     except sqlite3.IntegrityError: return None
     except Exception as e: print(f"Error adding union member: {e}"); conn.rollback(); return None
+
+# --- 4b. SKILLS ASSESSMENT HELPERS ---
+def getSkillCategories(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
+    """Return all recorded skills for a user as list of {skillName, level, score}."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT skill_name, level, score
+        FROM skill_assessments
+        WHERE user_id = ?
+        ORDER BY skill_name ASC
+        """,
+        (user_id,)
+    )
+    rows = cur.fetchall()
+    return [{"skillName": r[0], "level": r[1], "score": int(r[2])} for r in rows]
+
+def getAssessmentHistory(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
+    """Return assessment history entries as list of {date, category, score}."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT date, category, score
+        FROM assessment_history
+        WHERE user_id = ?
+        ORDER BY date DESC
+        """,
+        (user_id,)
+    )
+    rows = cur.fetchall()
+    return [{"date": r[0], "category": r[1], "score": int(r[2])} for r in rows]
 
 # --- 4. ADD NEW PASSWORD RESET FUNCTIONS ---
 def create_reset_code(conn: sqlite3.Connection, email: str) -> str:
