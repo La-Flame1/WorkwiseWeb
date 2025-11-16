@@ -3,8 +3,8 @@ import sqlite3
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 import os 
-import random # <-- 1. ADD THIS IMPORT
-import string # <-- 2. ADD THIS IMPORT
+import random 
+import string 
 
 # --- This path logic is robust for both local and Railway ---
 def _resolve_database_path() -> str:
@@ -257,6 +257,46 @@ def initDatabase() -> None:
     ''')
     cur.execute("CREATE INDEX IF NOT EXISTS idx_assess_hist_user ON assessment_history (user_id, date)")
     # --- END SKILLS TABLES ---
+
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS conversations (
+        conversation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT DEFAULT (datetime('now'))
+    )
+    ''')
+
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS conversation_participants (
+        conversation_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        PRIMARY KEY (conversation_id, user_id),
+        FOREIGN KEY (conversation_id) REFERENCES conversations (conversation_id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+    )
+    ''')
+
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS messages (
+        message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id INTEGER NOT NULL,
+        sender_id INTEGER NOT NULL,
+        body TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (conversation_id) REFERENCES conversations (conversation_id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES users (user_id) ON DELETE CASCADE
+    )
+    ''')
+
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS message_reads (
+        message_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        read_at TEXT NOT NULL,
+        PRIMARY KEY (message_id, user_id),
+        FOREIGN KEY (message_id) REFERENCES messages (message_id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+    )
+    ''')
 
     # --- AUTO-POPULATE DATABASE ---
     cur.execute("SELECT COUNT(*) FROM jobs")
@@ -742,5 +782,84 @@ def reset_user_password(conn: sqlite3.Connection, email: str, code: str, new_pas
         "UPDATE password_reset_codes SET is_used = 1 WHERE email = ? AND code = ?",
         (email, code)
     )
+    conn.commit()
+    return True
+
+def createConversation(conn: sqlite3.Connection, participant_ids: List[int]) -> Optional[int]:
+    cur = conn.cursor()
+    # Reuse an existing 1:1 convo (optional: extend to group dedupe)
+    if len(participant_ids) == 2:
+        cur.execute("""
+          SELECT cp1.conversation_id FROM conversation_participants cp1
+          JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+          GROUP BY cp1.conversation_id
+          HAVING SUM(CASE WHEN cp1.user_id IN (?, ?) THEN 1 ELSE 0 END)=2
+                 AND COUNT(*)=2
+        """, (participant_ids[0], participant_ids[1]))
+        row = cur.fetchone()
+        if row:
+            return row[0]
+
+    cur.execute("INSERT INTO conversations DEFAULT VALUES")
+    cid = cur.lastrowid
+    for uid in participant_ids:
+        cur.execute("INSERT OR IGNORE INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)", (cid, uid))
+    conn.commit()
+    return cid
+
+def listUserConversations(conn: sqlite3.Connection, user_id: int) -> List[Dict[str, Any]]:
+    cur = conn.cursor()
+    cur.execute("""
+      SELECT c.conversation_id,
+             MAX(m.created_at) as last_message_at,
+             COUNT(m.message_id) as message_count
+      FROM conversations c
+      JOIN conversation_participants cp ON cp.conversation_id=c.conversation_id
+      LEFT JOIN messages m ON m.conversation_id=c.conversation_id
+      WHERE cp.user_id=?
+      GROUP BY c.conversation_id
+      ORDER BY COALESCE(last_message_at, c.rowid) DESC
+    """, (user_id,))
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+def listConversationMembers(conn: sqlite3.Connection, conversation_id: int) -> List[int]:
+    cur = conn.cursor()
+    cur.execute("SELECT user_id FROM conversation_participants WHERE conversation_id=?", (conversation_id,))
+    return [r[0] for r in cur.fetchall()]
+
+def userInConversation(conn: sqlite3.Connection, conversation_id: int, user_id: int) -> bool:
+    cur = conn.cursor()
+    cur.execute("SELECT 1 FROM conversation_participants WHERE conversation_id=? AND user_id=?", (conversation_id, user_id))
+    return cur.fetchone() is not None
+
+def addMessage(conn: sqlite3.Connection, conversation_id: int, sender_id: int, body: str) -> Optional[int]:
+    cur = conn.cursor()
+    cur.execute("INSERT INTO messages (conversation_id, sender_id, body) VALUES (?, ?, ?)", (conversation_id, sender_id, body))
+    conn.commit()
+    return cur.lastrowid
+
+def getMessages(conn: sqlite3.Connection, conversation_id: int, limit: int = 50, before: Optional[int] = None) -> List[Dict[str, Any]]:
+    cur = conn.cursor()
+    if before:
+        cur.execute("""
+          SELECT * FROM messages 
+          WHERE conversation_id=? AND message_id<? 
+          ORDER BY message_id DESC LIMIT ?
+        """, (conversation_id, before, limit))
+    else:
+        cur.execute("""
+          SELECT * FROM messages 
+          WHERE conversation_id=? 
+          ORDER BY message_id DESC LIMIT ?
+        """, (conversation_id, limit))
+    rows = cur.fetchall()
+    cols = [d[0] for d in cur.description]
+    # return ascending for UI
+    return list(reversed([dict(zip(cols, r)) for r in rows]))
+
+def markRead(conn: sqlite3.Connection, user_id: int, message_id: int) -> bool:
+    cur = conn.cursor()
+    cur.execute("INSERT OR REPLACE INTO message_reads (message_id, user_id, read_at) VALUES (?, ?, datetime('now'))", (message_id, user_id))
     conn.commit()
     return True

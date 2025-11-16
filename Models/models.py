@@ -1,5 +1,5 @@
+from typing import List, Optional
 from pydantic import BaseModel, EmailStr
-from typing import Optional
 
 # ========== AUTH MODELS ==========
 class RegisterIn(BaseModel):
@@ -234,3 +234,22 @@ class AssessmentHistoryOut(BaseModel):
     date: str
     category: str
     score: int
+
+class ConversationCreateIn(BaseModel):
+    participantIds: List[int]  
+
+class ConversationOut(BaseModel):
+    conversationId: int
+    lastMessageAt: Optional[str] = None
+    messageCount: int
+
+class MessageSendIn(BaseModel):
+    senderId: int
+    body: str
+
+class MessageOut(BaseModel):
+    messageId: int
+    conversationId: int
+    senderId: int
+    body: str
+    createdAt: str

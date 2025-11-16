@@ -1,14 +1,15 @@
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Set
 import os
 import uuid
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from fastapi import Query
 import requests
 
-from fastapi import FastAPI, HTTPException, Depends, Request, File, UploadFile
+from fastapi import FastAPI, HTTPException, Depends, Request, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -18,7 +19,7 @@ from passlib.context import CryptContext
 from fastapi.routing import APIRoute
 
 from Models.models import (
-    RegisterIn, RegisterOut, LoginIn, LoginOut,
+    ConversationCreateIn, ConversationOut, MessageOut, MessageSendIn, RegisterIn, RegisterOut, LoginIn, LoginOut,
     UserProfileOut, UserProfileUpdateIn, ProfileImageUploadOut, 
     CVOut, CVUploadOut,
     QualificationIn, QualificationOut, QualificationUpdateIn,
@@ -33,12 +34,12 @@ from Models.models import (
 )
 
 from Database.db import (
-    initDatabase, getDatabase, userExists, getUsersDetails, getUserById,
+    addMessage, createConversation, getMessages, initDatabase, getDatabase, listUserConversations, markRead, userExists, getUsersDetails, getUserById,
     updateUserProfile, getUserCVs, addCV, deleteCV, setPrimaryCV,
     getUserQualifications, addQualification, updateQualification, deleteQualification,
     getUserApplicationsCount, getUserSavedJobsCount, getSavedJobs, addSavedJob, deleteSavedJob,
     addBusiness, addJob, getActiveJobs, getJobById, searchJobs,
-    unionExists, getUnions, workerInUnion, getUnionMembers,
+    unionExists, getUnions, userInConversation, workerInUnion, getUnionMembers,
     getSkillCategories, getAssessmentHistory,
     # 3. ADD NEW DB HELPERS
     emailExists, create_reset_code, verify_reset_code, reset_user_password
@@ -146,6 +147,12 @@ endpointTokens = {
     "POST:/v1/workwise/unions": "UNIONCREATETOK789",
     "GET:/v1/workwise/union_members": "MEMBERLISTTOK012",
     "POST:/v1/workwise/union_members": "MEMBERADDTOK345",
+
+    #Chat
+    "POST:/v1/workwise/chats": "CHATCREATETOK111",
+    "GET:/v1/workwise/chats/{user_id}": "CHATLISTTOK222",
+    "GET:/v1/workwise/chats/{conversation_id}/messages": "CHATMSGLISTTOK333",
+    "POST:/v1/workwise/chats/{conversation_id}/messages": "CHATMSGSENDTOK444",
 }
 
 def key(method: str, path: str) -> str:
@@ -919,3 +926,147 @@ def addMemberToUnion(body: UnionMemberIn):
         return UnionMemberOut(membershipId=membership_id, worker_id=body.worker_id, union_id=body.union_id, membership_num=membership_num, status=body.status or "active")
     finally:
         conn.close()
+
+@app.post(
+    "/v1/workwise/chats",
+    response_model = ConversationOut,
+    tags = ["chats"],
+    dependencies = [Depends(requireEndpointToken(endpointTokens[key("POST", "/v1/workwise/chats")]))]
+)
+def create_chat(body: ConversationCreateIn):
+    conn = getDatabase()
+    try:
+        cid = createConversation(conn, body.participantIds)
+        if cid is None:
+            raise HTTPException(status_code=500, detail="Failed to create conversation")
+        convs = listUserConversations(conn, body.participantIds[0])
+        meta = next((c for c in convs if c["conversation_id"] == cid), None)
+        return ConversationOut(
+            conversationId = cid,
+            lastMessageAt = meta["last_message_at"] if meta else None,
+            messageCount = meta["message_count"] if meta else 0,
+        )
+    finally:
+        conn.close()
+
+@app.get(
+    "/v1/workwise/chats/{user_id}",
+    response_model = List[ConversationOut],
+    tags = ["chats"],
+    dependencies = [Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/chats/{user_id}")]))]
+)
+def list_chats(user_id: int):
+    conn = getDatabase()
+    try:
+        convs = listUserConversations(conn, user_id)
+        return [
+            ConversationOut(
+                conversationId = c["conversation_id"],
+                lastMessageAt = c["last_message_at"],
+                messageCount = c["message_count"]
+            ) for c in convs
+        ]
+    finally:
+        conn.close()
+
+@app.get(
+    "/v1/workwise/chats/{conversation_id}/messages",
+    response_model = List[MessageOut],
+    tags = ["chats"],
+    dependencies = [Depends(requireEndpointToken(endpointTokens[key("GET", "/v1/workwise/chats/{conversation_id}/messages")]))]
+)
+def fetch_messages(conversation_id: int, limit: int = 50, before: int | None = None):
+    conn = getDatabase()
+    try:
+        msgs = getMessages(conn, conversation_id, limit=limit, before=before)
+        return [MessageOut(
+            messageId = m["message_id"],
+            conversationId = m["conversation_id"],
+            senderId = m["sender_id"],
+            body = m["body"],
+            createdAt = m["created_at"]
+        ) for m in msgs]
+    finally:
+        conn.close()
+
+@app.post(
+    "/v1/workwise/chats/{conversation_id}/messages",
+    response_model = MessageOut,
+    tags = ["chats"],
+    dependencies = [Depends(requireEndpointToken(endpointTokens[key("POST", "/v1/workwise/chats/{conversation_id}/messages")]))]
+)
+def send_message(conversation_id: int, body: MessageSendIn):
+    conn = getDatabase()
+    try:
+        if not userInConversation(conn, conversation_id, body.senderId):
+            raise HTTPException(status_code = 403, detail = "Not a participant")
+
+        mid = addMessage(conn, conversation_id, body.senderId, body.body)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM messages WHERE message_id=?", (mid,))
+        row = cur.fetchone()
+        out = MessageOut(
+            messageId = row["message_id"],
+            conversationId = row["conversation_id"],
+            senderId = row["sender_id"],
+            body = row["body"],
+            createdAt = row["created_at"]
+        )
+    finally:
+        conn.close()
+
+    # Push to WebSocket listeners
+    import json
+    payload = json.dumps(out.model_dump())
+    manager.broadcast(conversation_id, payload)
+    return out
+
+class ConnectionManager:
+    def __init__(self):
+        self.rooms: Dict[int, Set[WebSocket]] = {}
+
+    async def connect(self, ws: WebSocket, conversation_id: int):
+        await ws.accept()
+        self.rooms.setdefault(conversation_id, set()).add(ws)
+
+    def disconnect(self, ws: WebSocket, conversation_id: int):
+        if conversation_id in self.rooms:
+            self.rooms[conversation_id].discard(ws)
+            if not self.rooms[conversation_id]:
+                self.rooms.pop(conversation_id, None)
+
+    def broadcast(self, conversation_id: int, message: str):
+        for ws in list(self.rooms.get(conversation_id, [])):
+            try:
+                # send_text is async but we can schedule it; simplest:
+                import asyncio
+                asyncio.create_task(ws.send_text(message))
+            except Exception:
+                pass
+
+manager = ConnectionManager()
+
+@app.websocket("/v1/workwise/ws/chat")
+async def ws_chat(ws: WebSocket, conversation_id: int = Query(...), user_id: int = Query(...)):
+    # Optionally: validate endpoint token via headers here if you want symmetry
+    conn = getDatabase()
+    try:
+        if not userInConversation(conn, conversation_id, user_id):
+            await ws.close(code = 4403)  # Forbidden
+            return
+    finally:
+        conn.close()
+
+    await manager.connect(ws, conversation_id)
+    try:
+        while True:
+            # Client may send read receipts or typing events
+            data = await ws.receive_json()
+            if data.get("type") == "read" and "messageId" in data:
+                conn = getDatabase()
+                try:
+                    markRead(conn, user_id, int(data["messageId"]))
+                finally:
+                    conn.close()
+    except WebSocketDisconnect:
+        manager.disconnect(ws, conversation_id)
