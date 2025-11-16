@@ -517,7 +517,7 @@ def reset_password(body: ResetPasswordIn):
     conn = getDatabase()
     try:
         # Hash the new password
-        new_hash = pwd.hash(body.newPassword)
+        new_hash = pwd.hash(body.password)
         
         success = reset_user_password(conn, body.email, body.code, new_hash)
         

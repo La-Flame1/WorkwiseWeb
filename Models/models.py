@@ -214,7 +214,7 @@ class VerifyResetCodeOut(BaseModel):
 class ResetPasswordIn(BaseModel):
     email: EmailStr
     code: str
-    newPassword: str
+    Password: str
 
 class ResetPasswordOut(BaseModel):
     success: bool
