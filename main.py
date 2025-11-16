@@ -8,6 +8,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from fastapi import Query
 import requests
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Depends, Request, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -43,6 +44,8 @@ from Database.db import (
     # 3. ADD NEW DB HELPERS
     emailExists, create_reset_code, verify_reset_code, reset_user_password
 )
+
+load_dotenv()
 
 # ... (Upload directory setup is unchanged) ...
 UPLOAD_DIR = "uploads"

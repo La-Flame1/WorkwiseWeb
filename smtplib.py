@@ -1,25 +1,43 @@
+# workwiseweb/smtplib.py
+
 import os
-import smtplib
-from email.mime.text import MIMEText
+from typing import Optional
 
-smtp_host = os.environ.get('SMTP_HOST')
-smtp_port = int(os.environ.get('SMTP_PORT', 587))
-smtp_user = os.environ['SMTP_USERNAME']
-smtp_pass = os.environ['SMTP_PASSWORD']
-smtp_from = os.environ.get('SMTP_FROM')
+# Safely get environment variables
+SMTP_USERNAME: Optional[str] = os.getenv('SMTP_USERNAME')
+SMTP_PASSWORD: Optional[str] = os.getenv('SMTP_PASSWORD')
+SMTP_SERVER: str = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+SMTP_PORT: int = int(os.getenv('SMTP_PORT', '587'))
 
-# Ensure required environment variables are set so a str is passed to smtplib.SMTP and message headers
-if smtp_host is None:
-    raise ValueError("SMTP_HOST environment variable is not set")
-if smtp_from is None:
-    raise ValueError("SMTP_FROM environment variable is not set")
+# Optional: Validate at startup
+if SMTP_USERNAME and SMTP_PASSWORD:
+    print("SMTP configured for password reset emails.")
+else:
+    print("Warning: SMTP not configured. Password reset emails will be skipped.")
 
-msg = MIMEText("Your reset code: 797300")
-msg['Subject'] = 'Password Reset'
-msg['From'] = smtp_from
-msg['To'] = 'recipient@example.com'
+def send_email(to: str, subject: str, body: str) -> bool:
+    if not SMTP_USERNAME or not SMTP_PASSWORD:
+        print(f"SMTP not configured. Skipping email to {to}")
+        return False
 
-with smtplib.SMTP(smtp_host, smtp_port) as server:
-    server.starttls()  # Enable TLS
-    server.login(smtp_user, smtp_pass)
-    server.send_message(msg)
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USERNAME
+        msg['To'] = to
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        print(f"Email sent to {to}")
+        return True
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+        return False
