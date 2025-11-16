@@ -8,15 +8,7 @@ import string
 
 # --- This path logic is robust for both local and Railway ---
 def _resolve_database_path() -> str:
-    """Determine database path based on server/environment.
 
-    Resolution order (first match wins):
-    1. Explicit override via WORKWISE_DB_PATH env.
-    2. Railway: RAILWAY_ENVIRONMENT -> /data/databaseWorkwise.db
-    3. Generic production/staging via ENV env var -> /var/lib/workwise/databaseWorkwise.db (ensure dir).
-    4. Hostname heuristic (starts with 'prod', 'web', 'api') -> /var/lib/workwise/databaseWorkwise.db
-    5. Fallback to user home: ~/.workwise/databaseWorkwise.db
-    """
     override = os.environ.get("WORKWISE_DB_PATH")
     if override:
         return override
@@ -302,14 +294,13 @@ def initDatabase() -> None:
     cur.execute("SELECT COUNT(*) FROM jobs")
     job_count = cur.fetchone()[0]
     
-    if job_count == 0:
-        print("Database is empty. Populating with initial data...")
+    if job_count < 1:
+
         _populate_initial_data(conn)
-        print("Initial data populated successfully.")
+
     else:
         print(f"Database already contains {job_count} jobs. Skipping population.")
-    # --- END ---
-
+ 
     conn.commit()
     conn.close()
     print("Database initialization complete.")
@@ -903,31 +894,8 @@ def markRead(conn: sqlite3.Connection, user_id: int, message_id: int) -> bool:
     return True
 
 
-def createPasswordReset(conn: sqlite3.Connection, user_id: int, reset_code: str, expires_at: str) -> Optional[int]:
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO password_resets (user_id, reset_code, expires_at, used) VALUES (?, ?, ?, 0)",
-        (user_id, reset_code, expires_at),
-    )
-    conn.commit()
-    return cur.lastrowid
-
-def getValidPasswordReset(conn: sqlite3.Connection, user_id: int, reset_code: str) -> Optional[Dict[str, Any]]:
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT reset_id, user_id, reset_code, expires_at, used FROM password_resets WHERE user_id = ? AND reset_code = ? ORDER BY reset_id DESC LIMIT 1",
-        (user_id, reset_code),
-    )
-    row = cur.fetchone()
-    if not row:
-        return None
-    return dict(row)
-
-def markPasswordResetUsed(conn: sqlite3.Connection, reset_id: int) -> None:
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE password_resets SET used = 1 WHERE reset_id = ?",
-        (reset_id,),
-    )
-    conn.commit()
-
+# --- ERROR FUNCTIONS REMOVED ---
+# The functions createPasswordReset, getValidPasswordReset, 
+# and markPasswordResetUsed have been removed as they 
+# referred to a non-existent 'password_resets' table 
+# and were duplicates of the correct logic above.

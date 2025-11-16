@@ -22,14 +22,13 @@ def send_email(to: str, subject: str, body: str) -> bool:
 
     try:
         import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
+        from email.message import EmailMessage
 
-        msg = MIMEMultipart()
+        msg = EmailMessage()
         msg['From'] = SMTP_USERNAME
         msg['To'] = to
         msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
+        msg.set_content(body)
 
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
