@@ -319,8 +319,8 @@ def initDatabase() -> None:
 #  --- FUNCTION TO POPULATE DATABASE ---
 # ----------------------------------------------------------------------
 def _populate_initial_data(conn: sqlite3.Connection):
-    # ... (This whole function is unchanged, keep your existing one) ...
     cur = conn.cursor()
+    conn.execute("BEGIN TRANSACTION")
     try:
         # 1. Standard Bank
         cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Standard Bank', 'Finance', 'Leading African financial services group.', 'https://www.standardbank.co.za', '5 Simmonds Street, Johannesburg, 2001')""")
@@ -333,58 +333,51 @@ def _populate_initial_data(conn: sqlite3.Connection):
 
         # 3. Takealot
         cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Takealot', 'E-commerce', 'South Africa''s largest online retailer.', 'https://www.takealot.com', '10 Rua Vasco Da Gama Plain, Cape Town, 8001')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (3, 'Senior Frontend Developer', 'Build customer-facing web applications using React.', '5+ years experience in frontend. Expert in React.js.', 'R700,000 - R900,000 PA', 'Cape Town, Western Cape', 'Hybrid')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (3, 'Senior Frontend Developer', 'Build customer-facing web applications using React.', '5+ years experience in frontend. Expert in React.js.', 'R700,000 - R900,000 PA', 'Cape Town, Western Cape', 'Full-time', 'Hybrid')""")
         cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (3, 'Weekend Delivery Driver', 'Deliver packages on Saturdays and Sundays.', 'Valid SA driver''s license. Own reliable vehicle.', 'R150 - R200 per hour', 'Cape Town, Western Cape', 'Part-time', 'Remote')""")
 
         # 4. Sasol
-        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Sasol', 'Energy & Chemicals', 'Global integrated chemicals and energy company.', 'https::/www.sasol.com', '50 Katherine Street, Sandton, Johannesburg, 2196')""")
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Sasol', 'Energy & Chemicals', 'Global integrated chemicals and energy company.', 'https://www.sasol.com', '50 Katherine Street, Sandton, Johannesburg, 2196')""")
         cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (4, 'Chemical Process Engineer', 'Design and optimize chemical processes.', 'BEng/BSc in Chemical Engineering. ECSA registered.', 'R600,000 - R850,000 PA', 'Secunda, Mpumalanga', 'Full-time', 'On-site')""")
 
         # 5. Woolworths
         cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Woolworths', 'Retail', 'Quality fashion, food, and homeware.', 'https://www.woolworths.co.za', '93 Longmarket Street, Cape Town, 8001')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (5, 'Supply Chain Manager', 'Oversee the end-to-end supply chain for fresh produce.', 'BCom in Logistics. 5+ years in FMCG retail.', 'R800,000 - R1,100,000 PA', 'Cape Town, Western Cape', 'Hybrid')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (5, 'Supply Chain Manager', 'Oversee the end-to-end supply chain for fresh produce.', 'BCom in Logistics. 5+ years in FMCG retail.', 'R800,000 - R1,100,000 PA', 'Cape Town, Western Cape', 'Full-time', 'Hybrid')""")
         cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (5, 'Community Garden Volunteer', 'Help maintain the community garden.', 'Passion for sustainability. 4 hours per week.', 'Unpaid (Volunteer)', 'Stellenbosch, Western Cape', 'Volunteer', 'On-site')""")
 
         # 6. Discovery
         cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Discovery', 'Insurance & Financial Services', 'Shared-value insurance provider.', 'https://www.discovery.co.za', '1 Discovery Place, Sandton, Johannesburg, 2196')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (6, 'Actuarial Specialist', 'Develop models for risk assessment and product pricing.', 'Qualified or nearly-qualified Actuary.', 'R900,000 - R1,300,000 PA', 'Sandton, Gauteng', 'Hybrid')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (6, 'Actuarial Specialist', 'Develop models for risk assessment and product pricing.', 'Qualified or nearly-qualified Actuary.', 'R900,000 - R1,300,000 PA', 'Sandton, Gauteng', 'Full-time', 'Hybrid')""")
 
-        # 7. Anglo American
-        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Anglo American', 'Mining', 'One of the world''s largest mining companies.', 'https://www.angloamerican.com', '44 Main Street, Marshalltown, Johannesburg, 2001')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (7, 'Geologist', 'Conduct geological mapping and resource estimation.', 'BSc (Hons) in Geology. 3+ years experience.', 'R700,000 - R950,000 PA', 'Rustenburg, North West', 'Full-time', 'On-site')""")
+        # 7. Absa
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Absa Group', 'Finance', 'One of South Africa''s largest financial services groups.', 'https://www.absa.co.za', '15 Troye Street, Johannesburg, 2001')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (7, 'Cybersecurity Analyst', 'Monitor and protect IT systems from cyber threats.', 'CISSP or CISM certified. 3+ years experience.', 'R600,000 - R850,000 PA', 'Johannesburg, Gauteng', 'Full-time', 'On-site')""")
 
-        # 8. Shoprite
-        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Shoprite Holdings', 'Retail', 'Africa''s largest food retailer.', 'https://www.shopriteholdings.co.za', 'Cnr Old Paarl Rd & Cilmor Street, Brackenfell, Cape Town, 7560')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (8, 'Retail Store Manager', 'Manage all operations of a high-volume Checkers store.', 'Matric. 5+ years in retail management.', 'R350,000 - R500,000 PA', 'Durban, KZN', 'Full-time', 'On-site')""")
+        # 8. Nedbank
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Nedbank', 'Finance', 'One of South Africa''s largest banks.', 'https://www.nedbank.co.za', '135 Rivonia Road, Sandton, Johannesburg, 2196')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (8, 'Data Scientist', 'Analyze large datasets to drive business insights.', 'MSc in Data Science or related. 2+ years experience.', 'R750,000 - R1,000,000 PA', 'Sandton, Gauteng', 'Full-time', 'Hybrid')""")
 
-        # 9. Dimension Data
-        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Dimension Data', 'IT Services', 'Global systems integrator.', 'https://www.dimensiondata.com', '1 Sluice Business Park, Sluice Rd, Bryanston, Johannesburg, 2191')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (9, 'Cloud Solutions Architect', 'Design and implement hybrid cloud solutions (Azure/AWS).', 'Azure/AWS certification. 5+ years experience.', 'R900,000 - R1,200,000 PA', 'Johannesburg, Gauteng', 'Full-time', 'Remote')""")
+        # 9. Capitec
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Capitec Bank', 'Finance', 'South African retail bank focused on simplicity and affordability.', 'https://www.capitecbank.co.za', 'One Capital Place, 1 Heerengracht, Cape Town, 8001')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (9, 'Mobile App Developer', 'Develop and maintain the Capitec mobile banking app.', 'BSc in Computer Science. Experience in iOS/Android.', 'R650,000 - R850,000 PA', 'Cape Town, Western Cape', 'Full-time', 'Hybrid')""")
 
-        # 10. FNB
-        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('First National Bank', 'Finance', 'One of South Africa''s "big four" banks.', 'https://www.fnb.co.za', '1 First Place, Bank City, Johannesburg, 2000')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (10, 'UX/UI Designer (Banking App)', 'Create user experiences for the FNB mobile app.', 'Portfolio of mobile app designs. 3+ years in UX/UI.', 'R550,000 - R700,000 PA', 'Cape Town, Western Cape', 'Full-time', 'Hybrid')""")
+        # 10. Investec
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Investec', 'Finance', 'International specialist bank and asset manager.', 'https://www.investec.com', '100 Grayston Drive, Sandton, Johannesburg, 2196')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (10, 'Wealth Management Advisor', 'Provide financial advice to high-net-worth clients.', 'CFP certification. 5+ years in wealth management.', 'R1,000,000 - R1,500,000 PA', 'Sandton, Gauteng', 'Full-time', 'Hybrid')""")
 
-        # 11. MultiChoice
-        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('MultiChoice', 'Media & Entertainment', 'Owner of DStv and Showmax.', 'https://www.multichoice.com', '144 Bram Fischer Drive, Randburg, Johannesburg, 2194')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (11, 'Digital Marketing Specialist', 'Run performance marketing campaigns for Showmax.', 'Degree in Marketing. 3+ years in digital marketing.', 'R400,000 - R550,000 PA', 'Johannesburg, Gauteng', 'Full-time', 'Hybrid')""")
+        # 11. Bidvest
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Bidvest Group', 'Services & Distribution', 'Diversified services, trading and distribution company.', 'https://www.bidvest.co.za', 'Bidvest House, 18 Crescent Drive, Melrose Arch, Johannesburg, 2196')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (11, 'Logistics Coordinator', 'Coordinate logistics for supply chain operations.', 'BCom in Logistics. 3+ years experience.', 'R400,000 - R550,000 PA', 'Johannesburg, Gauteng', 'Full-time', 'On-site')""")
 
-        # 12. Sanlam
-        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Sanlam', 'Insurance & Financial Services', 'Diversified financial services group.', 'https_www.sanlam.com', '2 Strand Road, Bellville, Cape Town, 7530')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (12, 'Data Scientist', 'Use machine learning to model customer behavior.', 'MSc in Data Science/Stats. 2+ years experience. Python, R, SQL.', 'R650,000 - R850,000 PA', 'Cape Town, Western Cape', 'Full-time', 'Hybrid')""")
 
-        # 13. Capitec Bank
-        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Capitec Bank', 'Finance', 'South African retail bank.', 'https://www.capitecbank.co.za', '5 Neutron Street, Techno Park, Stellenbosch, 7600')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (13, 'Client Service Champion', 'Assist clients in-branch with their banking needs.', 'Matric. Passion for client service.', 'R180,000 - R240,000 PA', 'Stellenbosch, Western Cape', 'Full-time', 'On-site')""")
+        # 12. Sanlam (correct website URL)
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Sanlam', 'Insurance & Financial Services', 'Diversified financial services group.', 'https://www.sanlam.com', '2 Strand Road, Bellville, Cape Town, 7530')""")
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Vodacom', 'Telecommunications', 'Leading African mobile communications company.', 'https://www.vodacom.com', 'Vodacom Corporate Park, 082 Vodacom Blvd, Midrand, 1685')""")
 
-        # 14. Vodacom
-        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Vodacom', 'Telecommunications', 'Leading African mobile communications company.', 'https.www.vodacom.com', 'Vodacom Corporate Park, 082 Vodacom Blvd, Midrand, 1685')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (14, 'IoT Solutions Developer', 'Develop and support IoT solutions for enterprise clients.', 'BEng/BSc Computer Science. 3+ years Java/Python.', 'R600,000 - R800,000 PA', 'Midrand, Gauteng', 'Full-time', 'Hybrid')""")
 
-        # 15. Allan Gray
-        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Allan Gray', 'Investment Management', 'Africa''s largest privately owned investment manager.', 'https.www.allangray.co.za', '1 Silo Square, V&A Waterfront, Cape Town, 8001')""")
-        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (15, 'Investment Analyst', 'Conduct deep fundamental research on JSE-listed companies.', 'BCom (Hons) / CFA Charterholder. Passion for investing.', 'R750,000 - R1,100,000 PA', 'Cape Town, Western Cape', 'Full-time', 'On-site')""")
-        
+        # 15. Allan Gray (correct website URL)
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Allan Gray', 'Investment Management', 'Africa''s largest privately owned investment manager.', 'https://www.allangray.co.za', '1 Silo Square, V&A Waterfront, Cape Town, 8001')""")
+
         # 16. Armscor
         cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Armscor', 'Defense', 'Armaments Corporation of South Africa, provides defense acquisition and logistics.', 'https://www.armscor.co.za', '370 Nossob Street, Erasmuskloof Ext 4, Pretoria, 0048')""")
         cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (16, 'Procurement Specialist', 'Manage procurement processes for defense equipment.', 'BCom in Supply Chain Management. 3+ years in procurement.', 'R500,000 - R700,000 PA', 'Pretoria, Gauteng', 'Full-time', 'Hybrid')""")
@@ -426,12 +419,14 @@ def _populate_initial_data(conn: sqlite3.Connection):
         cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (25, 'Policy Analyst', 'Conduct research on African security issues.', 'MA in International Relations. Research experience.', 'R450,000 - R600,000 PA', 'Pretoria, Gauteng', 'Full-time', 'Hybrid')""")
 
         conn.commit()
+        print("Initial data populated successfully.")
     except sqlite3.Error as e:
         print(f"An error occurred: {e}")
         conn.rollback()
     except Exception as e:
-        print(f"An error occurred during data population: {e}")
         conn.rollback()
+        print(f"Error during population: {e}")
+        raise
 
 
 # ----------------------------------------------------------------------
