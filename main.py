@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, cast
 import os
 import uuid
 import smtplib
@@ -516,8 +516,11 @@ def verify_code(body: VerifyResetCodeIn):
 def reset_password(body: ResetPasswordIn):
     conn = getDatabase()
     try:
-        # Hash the new password
-        new_hash = pwd.hash(body.password)
+        # Validate that a password was provided and is a string
+        if not hasattr(body, "password") or body.password is None or not isinstance(body.password, str) or body.password == "":
+            raise HTTPException(status_code=400, detail="Password must be provided and be a non-empty string")
+        # Use typing.cast so static type checkers know this is a str
+        new_hash = pwd.hash(cast(str, body.password))
         
         success = reset_user_password(conn, body.email, body.code, new_hash)
         
