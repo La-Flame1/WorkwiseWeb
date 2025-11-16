@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr , Field
 
 # ========== AUTH MODELS ==========
 class RegisterIn(BaseModel):
@@ -214,7 +214,7 @@ class VerifyResetCodeOut(BaseModel):
 class ResetPasswordIn(BaseModel):
     email: EmailStr
     code: str
-    Password: str
+    password: str = Field(..., min_length=8)
 
 class ResetPasswordOut(BaseModel):
     success: bool
