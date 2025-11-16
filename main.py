@@ -27,7 +27,6 @@ from Models.models import (
     BusinessIn, BusinessOut, JobIn, JobOut, JobListingOut, JobDetailOut,
     UnionIn, UnionOut, UnionMemberIn, UnionMemberOut,
     SkillCategoryOut, AssessmentHistoryOut,
-    # 2. ADD NEW PASSWORD MODELS
     ForgotPasswordIn, ForgotPasswordOut,
     VerifyResetCodeIn, VerifyResetCodeOut,
     ResetPasswordIn, ResetPasswordOut, ApiResponse
@@ -153,6 +152,11 @@ endpointTokens = {
     "GET:/v1/workwise/chats/{user_id}": "CHATLISTTOK222",
     "GET:/v1/workwise/chats/{conversation_id}/messages": "CHATMSGLISTTOK333",
     "POST:/v1/workwise/chats/{conversation_id}/messages": "CHATMSGSENDTOK444",
+
+    #Forgot Password
+    "POST:/v1/workwise/forgot-password": "FORGOTPWDTOK123",
+    "POST:/v1/workwise/verify-reset-code": "VERIFYCODETOK456",
+    "POST:/v1/workwise/reset-password": "RESETPWDTOK789",
 }
 
 def key(method: str, path: str) -> str:
@@ -196,7 +200,7 @@ def send_reset_code_email(to_email: str, code: str) -> bool:
                   <p><strong>This code will expire in 15 minutes.</strong></p>
                   <p>If you didn't request this, please ignore this email.</p>
                   <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
-                  <p style="color: #777; font-size: 12px;">Best regards,<br>WorkWise Team</p>
+                  <p style="color: #777, font-size: 12px;">Best regards,<br>WorkWise Team</p>
                 </div>
               </body>
             </html>
@@ -308,6 +312,96 @@ def send_reset_code_email(to_email: str, code: str) -> bool:
     except Exception as e:
         print(f"Failed to send email to {to_email}: {e}")
         print(f"webReset code for {to_email}: {code} (NOT SENT - Error occurred)")
+        return False
+
+
+def send_password_changed_confirmation(to_email: str, username: str) -> bool:
+    """Send a simple confirmation email when a user's password has been changed.
+    Uses SendGrid if SENDGRID_API_KEY is set, otherwise falls back to SMTP.
+    Returns True on success, False on failure.
+    """
+    sendgrid_api_key = os.environ.get("SENDGRID_API_KEY", "")
+    subject = "Your WorkWise password has been changed"
+    text_content = f"""Hi {username},
+
+Your WorkWise account password was changed successfully. If you did not perform this action, please contact support immediately.
+
+Best regards,
+WorkWise Team
+"""
+    html_content = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #333;">
+        <div style="max-width:600px;margin:0 auto;padding:20px;">
+          <h2 style="color:#4CAF50;">Password Changed</h2>
+          <p>Hi {username},</p>
+          <p>Your WorkWise account password was changed successfully. If you did not perform this action, please contact support immediately.</p>
+          <p style="color:#777;font-size:12px;">Best regards,<br/>WorkWise Team</p>
+        </div>
+      </body>
+    </html>
+    """
+
+    # Try SendGrid first
+    if sendgrid_api_key:
+        try:
+            from_email = os.environ.get("FROM_EMAIL", "noreply@workwise.app")
+            url = "https://api.sendgrid.com/v3/mail/send"
+            headers = {
+                "Authorization": f"Bearer {sendgrid_api_key}",
+                "Content-Type": "application/json"
+            }
+            payload: dict[str, Any] = {
+                "personalizations": [{
+                    "to": [{"email": to_email}],
+                    "subject": subject
+                }],
+                "from": {"email": from_email, "name": "WorkWise"},
+                "content": [
+                    {"type": "text/plain", "value": text_content},
+                    {"type": "text/html", "value": html_content}
+                ]
+            }
+            resp = requests.post(url, json=payload, headers=headers, timeout=10)
+            if resp.status_code == 202:
+                print(f"SendGrid: Sent password-changed confirmation to {to_email}")
+                return True
+            else:
+                print(f"SendGrid error ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            print(f"SendGrid send failed: {e}")
+
+    # Fallback to SMTP
+    try:
+        smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+        smtp_user = os.environ.get("SMTP_USER", "")
+        smtp_password = os.environ.get("SMTP_PASSWORD", "")
+        from_email = os.environ.get("FROM_EMAIL", smtp_user)
+
+        if not smtp_user or not smtp_password:
+            print("SMTP credentials not configured; cannot send password-changed confirmation.")
+            return False
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = from_email
+        msg["To"] = to_email
+
+        part1 = MIMEText(text_content, "plain")
+        part2 = MIMEText(html_content, "html")
+        msg.attach(part1)
+        msg.attach(part2)
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.send_message(msg)
+
+        print(f"SMTP: Sent password-changed confirmation to {to_email}")
+        return True
+    except Exception as e:
+        print(f"Failed to send password-changed confirmation to {to_email}: {e}")
         return False
 
 # ... (Exception handler and ping are unchanged) ...
@@ -1070,3 +1164,9 @@ async def ws_chat(ws: WebSocket, conversation_id: int = Query(...), user_id: int
                     conn.close()
     except WebSocketDisconnect:
         manager.disconnect(ws, conversation_id)
+
+
+# Duplicate/legacy password-reset endpoints removed.
+# The earlier implementations (above) using create_reset_code, verify_reset_code and reset_user_password
+# are retained and should be used; removing these duplicates avoids undefined functions (e.g. generate_reset_code)
+# and duplicate FastAPI route definitions.

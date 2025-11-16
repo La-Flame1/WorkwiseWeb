@@ -906,3 +906,33 @@ def markRead(conn: sqlite3.Connection, user_id: int, message_id: int) -> bool:
     cur.execute("INSERT OR REPLACE INTO message_reads (message_id, user_id, read_at) VALUES (?, ?, datetime('now'))", (message_id, user_id))
     conn.commit()
     return True
+
+
+def createPasswordReset(conn: sqlite3.Connection, user_id: int, reset_code: str, expires_at: str) -> Optional[int]:
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO password_resets (user_id, reset_code, expires_at, used) VALUES (?, ?, ?, 0)",
+        (user_id, reset_code, expires_at),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+def getValidPasswordReset(conn: sqlite3.Connection, user_id: int, reset_code: str) -> Optional[Dict[str, Any]]:
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT reset_id, user_id, reset_code, expires_at, used FROM password_resets WHERE user_id = ? AND reset_code = ? ORDER BY reset_id DESC LIMIT 1",
+        (user_id, reset_code),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    return dict(row)
+
+def markPasswordResetUsed(conn: sqlite3.Connection, reset_id: int) -> None:
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE password_resets SET used = 1 WHERE reset_id = ?",
+        (reset_id,),
+    )
+    conn.commit()
+
