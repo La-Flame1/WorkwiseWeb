@@ -385,7 +385,50 @@ def _populate_initial_data(conn: sqlite3.Connection):
         cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Allan Gray', 'Investment Management', 'Africa''s largest privately owned investment manager.', 'https.www.allangray.co.za', '1 Silo Square, V&A Waterfront, Cape Town, 8001')""")
         cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (15, 'Investment Analyst', 'Conduct deep fundamental research on JSE-listed companies.', 'BCom (Hons) / CFA Charterholder. Passion for investing.', 'R750,000 - R1,100,000 PA', 'Cape Town, Western Cape', 'Full-time', 'On-site')""")
         
+        # 16. Armscor
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Armscor', 'Defense', 'Armaments Corporation of South Africa, provides defense acquisition and logistics.', 'https://www.armscor.co.za', '370 Nossob Street, Erasmuskloof Ext 4, Pretoria, 0048')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (16, 'Procurement Specialist', 'Manage procurement processes for defense equipment.', 'BCom in Supply Chain Management. 3+ years in procurement.', 'R500,000 - R700,000 PA', 'Pretoria, Gauteng', 'Full-time', 'Hybrid')""")
+
+        # 17. Council for Scientific and Industrial Research
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Council for Scientific and Industrial Research', 'Research & Development', 'Africa''s largest research and development organisation.', 'https://www.csir.co.za', 'Meiring Naude Road, Brummeria, Pretoria, 0001')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (17, 'Research Scientist', 'Conduct advanced research in materials science.', 'PhD in Materials Engineering. 2+ years research experience.', 'R600,000 - R800,000 PA', 'Pretoria, Gauteng', 'Full-time', 'On-site')""")
+
+        # 18. Aerosud
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Aerosud', 'Aerospace', 'South African aeronautical engineering and manufacturing company.', 'https://www.aerosud.co.za', '520 Van Ryneveld Avenue, Pierre Van Ryneveld, Pretoria, 0045')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (18, 'Aerospace Engineer', 'Design aircraft components and systems.', 'BEng in Aerospace Engineering. 4+ years experience.', 'R650,000 - R850,000 PA', 'Pretoria, Gauteng', 'Full-time', 'Hybrid')""")
+
+        # 19. Land and Agricultural Development Bank of South Africa
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Land and Agricultural Development Bank of South Africa', 'Finance', 'Specialist agricultural Development Finance Institution.', 'https://www.landbank.co.za', '272 Lenchen Avenue, Centurion, Pretoria, 0001')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (19, 'Agricultural Loan Officer', 'Assess and approve loans for farming enterprises.', 'BCom in Agriculture or Finance. 2+ years in lending.', 'R400,000 - R550,000 PA', 'Pretoria, Gauteng', 'Full-time', 'Hybrid')""")
+
+        # 20. South African Reserve Bank
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('South African Reserve Bank', 'Finance', 'Central bank of South Africa.', 'https://www.resbank.co.za', '370 Helen Joseph Street, Pretoria, 0002')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (20, 'Economist', 'Analyze economic trends and formulate monetary policy.', 'MSc in Economics. 3+ years in economic research.', 'R700,000 - R900,000 PA', 'Pretoria, Gauteng', 'Full-time', 'Hybrid')""")
+
+        # 21. South African National Roads Agency
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('South African National Roads Agency', 'Infrastructure', 'Responsible for management, maintenance, and development of South Africa''s national road network.', 'https://www.nra.co.za', '48 Tambotie Avenue, Val de Grace, Pretoria, 0184')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (21, 'Civil Engineer', 'Oversee road construction and maintenance projects.', 'BEng in Civil Engineering. ECSA registration.', 'R550,000 - R750,000 PA', 'Pretoria, Gauteng', 'Full-time', 'On-site')""")
+
+        # 22. Ford Motor Company of Southern Africa
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Ford Motor Company of Southern Africa', 'Automotive', 'Automobile and commercial vehicle manufacturer in Southern Africa.', 'https://www.ford.co.za', 'Simon Vermooten Road, Silverton, Pretoria, 0184')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (22, 'Vehicle Assembly Technician', 'Assemble vehicles on the production line.', 'Technical diploma in Automotive. 1+ years experience.', 'R300,000 - R450,000 PA', 'Pretoria, Gauteng', 'Full-time', 'On-site')""")
+
+        # 23. GoBid
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('GoBid', 'Automotive', 'Online auction-based marketplace for used & accident cars.', 'https://www.gobid.co.za', '41 Matroosberg Road, Riverwalk Office Park, Pretoria, 0081')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (23, 'Auction Coordinator', 'Manage online vehicle auctions and bidder communications.', 'Diploma in Business Administration. 2+ years in sales.', 'R350,000 - R500,000 PA', 'Pretoria, Gauteng', 'Full-time', 'Hybrid')""")
+
+        # 24. hearX Group
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('hearX Group', 'Healthcare Technology', 'mHealth Solutions company providing digital audiology solutions.', 'https://hearxgroup.com', '180 Garsfontein Road, Ashlea Gardens Office Park, Pretoria, 0081')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (24, 'Software Developer', 'Develop mobile apps for hearing screening.', 'BSc in Computer Science. Experience in mobile development.', 'R500,000 - R700,000 PA', 'Pretoria, Gauteng', 'Full-time', 'Remote')""")
+
+        # 25. Institute for Security Studies
+        cur.execute("""INSERT INTO businesses (name, industry, description, website, address) VALUES ('Institute for Security Studies', 'Research', 'Pan-African think tank on human security.', 'https://issafrica.org', '361 Veale Street, Pretoria, Gauteng')""")
+        cur.execute("""INSERT INTO jobs (business_id, job_title, description, requirements, salary_range, location, employment_type, work_arrangement) VALUES (25, 'Policy Analyst', 'Conduct research on African security issues.', 'MA in International Relations. Research experience.', 'R450,000 - R600,000 PA', 'Pretoria, Gauteng', 'Full-time', 'Hybrid')""")
+
         conn.commit()
+    except sqlite3.Error as e:
+        print(f"An error occurred: {e}")
+        conn.rollback()
     except Exception as e:
         print(f"An error occurred during data population: {e}")
         conn.rollback()
