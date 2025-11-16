@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Set, cast
+from typing import Any, Dict, List, Optional, Set,
 import os
 import uuid
 import smtplib
@@ -516,13 +516,23 @@ def verify_code(body: VerifyResetCodeIn):
 def reset_password(body: ResetPasswordIn):
     conn = getDatabase()
     try:
-        # Validate that a password was provided and is a string
-        if not hasattr(body, "password") or body.password is None or not isinstance(body.password, str) or body.password == "":
+        # Use model_dump() to access fields as a plain dict to avoid static analysis errors
+        data: dict[str, Any] = body.model_dump()
+        pw = data.get("password")
+        if not isinstance(pw, str) or pw == "":
             raise HTTPException(status_code=400, detail="Password must be provided and be a non-empty string")
-        # Use typing.cast so static type checkers know this is a str
-        new_hash = pwd.hash(cast(str, body.password))
+        # pw is validated as a non-empty string
+        new_hash = pwd.hash(pw)
         
-        success = reset_user_password(conn, body.email, body.code, new_hash)
+        # Validate email and code before passing to reset_user_password to ensure correct types
+        email = data.get("email")
+        if not isinstance(email, str) or email.strip() == "":
+            raise HTTPException(status_code=400, detail="Email must be provided and be a non-empty string")
+        code = data.get("code")
+        if not isinstance(code, str) or code.strip() == "":
+            raise HTTPException(status_code=400, detail="Reset code must be provided and be a non-empty string")
+
+        success = reset_user_password(conn, email, code, new_hash)
         
         if success:
             return ResetPasswordOut(success=True, message="Password reset successfully")
